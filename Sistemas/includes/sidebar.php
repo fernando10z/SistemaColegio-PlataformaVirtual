@@ -178,7 +178,7 @@
               </a>
               <ul aria-expanded="false" class="collapse first-level">
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="eva/cursos/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="cursos.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Mis Cursos</span>
@@ -223,7 +223,7 @@
               </a>
               <ul aria-expanded="false" class="collapse first-level">
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="eva/foros/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="foros.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Foros</span>
@@ -600,8 +600,7 @@
               <span class="sidebar-divider lg"></span>
             </li>
 
-            <!-- 3.6 COMUNICACIÓN Y COLABORACIÓN -->
-            <li class="nav-small-cap">
+            <!-- <li class="nav-small-cap">
               <iconify-icon icon="solar:chat-dots-line-duotone" class="nav-small-cap-icon fs-4"></iconify-icon>
               <span class="hide-menu">Comunicación</span>
             </li>
@@ -620,7 +619,7 @@
                 </span>
                 <span class="hide-menu">Anuncios Sistema</span>
               </a>
-            </li>
+            </li> -->
 
             <li>
               <span class="sidebar-divider lg"></span>
