@@ -186,7 +186,7 @@
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="eva/unidades/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="unidades.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Unidades</span>
@@ -194,7 +194,7 @@
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="eva/lecciones/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="lecciones.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Lecciones</span>
@@ -202,7 +202,7 @@
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="eva/recursos/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="recursos.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Recursos</span>
@@ -239,14 +239,6 @@
                   </a>
                 </li>
               </ul>
-            </li>
-            <li class="sidebar-item">
-              <a class="sidebar-link primary-hover-bg" href="eva/repositorio/index.php" aria-expanded="false">
-                <span class="d-flex">
-                  <iconify-icon icon="solar:folder-line-duotone"></iconify-icon>
-                </span>
-                <span class="hide-menu">Repositorio</span>
-              </a>
             </li>
 
             <li>
