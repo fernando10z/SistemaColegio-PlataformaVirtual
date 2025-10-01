@@ -231,7 +231,7 @@
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="eva/anuncios/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="anuncios.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Anuncios</span>

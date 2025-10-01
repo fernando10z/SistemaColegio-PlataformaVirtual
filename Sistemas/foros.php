@@ -541,14 +541,15 @@
         </div>
     </div>
 
-    <!-- Scripts -->
+<!-- Scripts -->
     <script src="../assets/libs/jquery/dist/jquery.min.js"></script>
     <script src="../assets/libs/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="../assets/js/sidebarmenu.js"></script>
     <script src="../assets/js/app.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-        <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
-
+    <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
 
 <script>
     let tablaForos;
@@ -561,9 +562,9 @@
                 url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'
             },
             pageLength: 10,
-            order: [[5, 'desc']], // Ordenar por último mensaje
+            order: [[5, 'desc']], 
             columnDefs: [
-                { orderable: false, targets: [7] }, // Columna de acciones no ordenable
+                { orderable: false, targets: [7] },
                 { className: 'text-center', targets: [3, 4, 7] }
             ],
             dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
@@ -571,7 +572,6 @@
                  "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>",
             responsive: true,
             drawCallback: function() {
-                // Reinicializar tooltips después de cada redibujado
                 $('[data-bs-toggle="tooltip"]').tooltip();
             }
         });
@@ -579,20 +579,190 @@
         // Filtros personalizados
         $('#filtroCurso, #filtroEstado').on('change', aplicarFiltros);
         $('#buscarForo').on('keyup', aplicarFiltros);
-
-        // Inicializar tooltips
         $('[data-bs-toggle="tooltip"]').tooltip();
+
+        // Contadores de caracteres
+        $('#crear_descripcion').on('input', function() {
+            $('#contador_crear').text($(this).val().length);
+        });
+
+        $('#editar_descripcion').on('input', function() {
+            $('#contador_editar').text($(this).val().length);
+        });
+
+        $('#mensaje_contenido').on('input', function() {
+            $('#contador_mensaje').text($(this).val().length);
+        });
+
+        // Ayuda contextual según tipo
+        $('#crear_tipo, #editar_tipo').on('change', function() {
+            const tipo = $(this).val();
+            const helpDiv = $(this).closest('.col-md-6').find('.form-text');
+            
+            const descripciones = {
+                'GENERAL': 'Discusión abierta sobre cualquier tema relacionado',
+                'PREGUNTA_RESPUESTA': 'Formato de preguntas con respuestas específicas',
+                'DEBATE': 'Espacio para argumentar diferentes puntos de vista',
+                'ANUNCIO': 'Solo para publicar comunicados importantes'
+            };
+            
+            helpDiv.text(descripciones[tipo] || 'Seleccione el tipo de foro');
+        });
+
+        // Formulario crear foro
+        $('#formCrearForo').on('submit', function(e) {
+            e.preventDefault();
+            
+            if (!validarFormularioCrearForo()) {
+                return false;
+            }
+
+            const formData = new FormData(this);
+            formData.append('accion', 'crear');
+            
+            mostrarCarga();
+            $('#btnCrearForo').prop('disabled', true);
+
+            $.ajax({
+                url: 'modales/foros/procesar_foros.php',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                dataType: 'json',
+                success: function(response) {
+                    ocultarCarga();
+                    $('#btnCrearForo').prop('disabled', false);
+                    
+                    if (response.success) {
+                        Swal.fire({
+                            title: '¡Foro Creado!',
+                            text: response.message,
+                            icon: 'success',
+                            confirmButtonColor: '#198754'
+                        }).then(() => {
+                            $('#modalCrearForo').modal('hide');
+                            location.reload();
+                        });
+                    } else {
+                        mostrarError(response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    ocultarCarga();
+                    $('#btnCrearForo').prop('disabled', false);
+                    console.error('Error:', error);
+                    mostrarError('Error al procesar la solicitud');
+                }
+            });
+        });
+
+        // Formulario editar foro
+        $('#formEditarForo').on('submit', function(e) {
+            e.preventDefault();
+            
+            if (!validarFormularioEditarForo()) {
+                return false;
+            }
+
+            const formData = new FormData(this);
+            formData.append('accion', 'actualizar');
+            
+            mostrarCarga();
+            $('#btnEditarForo').prop('disabled', true);
+
+            $.ajax({
+                url: 'modales/foros/procesar_foros.php',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                dataType: 'json',
+                success: function(response) {
+                    ocultarCarga();
+                    $('#btnEditarForo').prop('disabled', false);
+                    
+                    if (response.success) {
+                        Swal.fire({
+                            title: '¡Foro Actualizado!',
+                            text: response.message,
+                            icon: 'success',
+                            confirmButtonColor: '#198754'
+                        }).then(() => {
+                            $('#modalEditarForo').modal('hide');
+                            location.reload();
+                        });
+                    } else {
+                        mostrarError(response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    ocultarCarga();
+                    $('#btnEditarForo').prop('disabled', false);
+                    console.error('Error:', error);
+                    mostrarError('Error al procesar la solicitud');
+                }
+            });
+        });
+
+        // Formulario nuevo mensaje
+        $('#formNuevoMensaje').on('submit', function(e) {
+            e.preventDefault();
+            
+            if (!validarFormularioMensaje()) {
+                return false;
+            }
+
+            const formData = new FormData(this);
+            formData.append('accion', 'crear_mensaje');
+            
+            mostrarCarga();
+            $('#btnEnviarMensaje').prop('disabled', true);
+
+            $.ajax({
+                url: 'modales/foros/procesar_foros.php',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                dataType: 'json',
+                success: function(response) {
+                    ocultarCarga();
+                    $('#btnEnviarMensaje').prop('disabled', false);
+                    
+                    if (response.success) {
+                        mostrarExito(response.message);
+                        $('#formNuevoMensaje')[0].reset();
+                        $('#contador_mensaje').text('0');
+                        cancelarRespuesta();
+                        const foroId = $('#mensaje_foro_id').val();
+                        verMensajes(foroId);
+                    } else {
+                        mostrarError(response.message);
+                    }
+                },
+                error: function(xhr, status, error) {
+                    ocultarCarga();
+                    $('#btnEnviarMensaje').prop('disabled', false);
+                    console.error('Error:', error);
+                    mostrarError('Error al enviar mensaje');
+                }
+            });
+        });
+
+        // Limpiar al cerrar modales
+        $('#modalCrearForo').on('hidden.bs.modal', limpiarFormularioCrear);
+        $('#modalEditarForo').on('hidden.bs.modal', limpiarFormularioEditar);
     });
 
+    // ==================== FILTROS ====================
     function aplicarFiltros() {
         const cursoFiltro = $('#filtroCurso').val();
         const estadoFiltro = $('#filtroEstado').val();
         const busqueda = $('#buscarForo').val();
 
-        // Limpiar búsqueda de DataTable
         tablaForos.search('').draw();
 
-        // Aplicar filtros personalizados
         $.fn.dataTable.ext.search.push(
             function(settings, data, dataIndex) {
                 const row = tablaForos.row(dataIndex).node();
@@ -613,14 +783,11 @@
             }
         );
 
-        // Aplicar búsqueda de texto
         if (busqueda) {
             tablaForos.search(busqueda);
         }
 
         tablaForos.draw();
-
-        // Limpiar filtros personalizados
         $.fn.dataTable.ext.search.pop();
     }
 
@@ -630,6 +797,7 @@
         tablaForos.search('').draw();
     }
 
+    // ==================== UTILIDADES ====================
     function mostrarCarga() {
         $('#loadingOverlay').css('display', 'flex');
     }
@@ -638,26 +806,331 @@
         $('#loadingOverlay').hide();
     }
 
-    function verMensajes(id) {
-        // Se implementará con el modal
-        mostrarCarga();
-        console.log('Ver mensajes foro:', id);
-        // Aquí irá la carga del modal de mensajes
-        setTimeout(() => {
-            ocultarCarga();
-        }, 500);
+    function mostrarExito(mensaje) {
+        Swal.fire({
+            title: '¡Éxito!',
+            text: mensaje,
+            icon: 'success',
+            confirmButtonColor: '#198754',
+            timer: 2000,
+            showConfirmButton: false
+        });
     }
 
+    function mostrarError(mensaje) {
+        Swal.fire({
+            title: 'Error',
+            text: mensaje,
+            icon: 'error',
+            confirmButtonColor: '#dc3545'
+        });
+    }
+
+    function marcarCampoError(selector, mensaje) {
+        const campo = $(selector);
+        campo.addClass('is-invalid campo-error');
+        campo.after(`<div class="invalid-feedback">${mensaje}</div>`);
+    }
+
+    // ==================== EDITAR FORO ====================
     function editarForo(id) {
-        // Se implementará con el modal
         mostrarCarga();
-        console.log('Editar foro:', id);
-        // Aquí irá la carga del modal de edición
-        setTimeout(() => {
+        
+        fetch('modales/foros/procesar_foros.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `accion=obtener&id=${id}`
+        })
+        .then(response => response.json())
+        .then(data => {
             ocultarCarga();
-        }, 500);
+            
+            if (data.success) {
+                cargarDatosEdicionForo(data.foro);
+                $('#modalEditarForo').modal('show');
+            } else {
+                mostrarError(data.message);
+            }
+        })
+        .catch(error => {
+            ocultarCarga();
+            console.error('Error completo:', error);
+            mostrarError('Error al obtener datos del foro');
+        });
     }
 
+    function cargarDatosEdicionForo(foro) {
+        console.log('Datos recibidos:', foro);
+        
+        $('#editar_foro_id').val(foro.id);
+        $('#editar_curso').val(foro.curso_id);
+        $('#editar_titulo').val(foro.titulo);
+        $('#editar_descripcion').val(foro.descripcion);
+        $('#contador_editar').text((foro.descripcion || '').length);
+        
+        // CORRECCIÓN CRÍTICA: Verificar si ya es objeto o string
+        let config = {};
+        if (typeof foro.configuraciones === 'string') {
+            try {
+                config = JSON.parse(foro.configuraciones);
+            } catch (e) {
+                console.error('Error parseando configuraciones:', e);
+                config = {};
+            }
+        } else if (typeof foro.configuraciones === 'object') {
+            config = foro.configuraciones || {};
+        }
+        
+        $('#editar_tipo').val(config.tipo || 'GENERAL');
+        $('#editar_estado').val(config.estado || 'ABIERTO');
+        $('#editar_moderado').prop('checked', config.moderado || false);
+        
+        // Estadísticas
+        let stats = {};
+        if (typeof foro.estadisticas === 'string') {
+            try {
+                stats = JSON.parse(foro.estadisticas);
+            } catch (e) {
+                console.error('Error parseando estadísticas:', e);
+                stats = {};
+            }
+        } else if (typeof foro.estadisticas === 'object') {
+            stats = foro.estadisticas || {};
+        }
+        
+        $('#stats_mensajes').text(stats.total_mensajes || 0);
+        $('#stats_participantes').text(stats.participantes || 0);
+        $('#stats_ultimo').text(stats.mensaje_mas_reciente ? 
+            new Date(stats.mensaje_mas_reciente).toLocaleString('es-PE') : '-');
+    }
+
+    function validarFormularioEditarForo() {
+        let isValid = true;
+        let errores = [];
+        
+        $('.is-invalid, .campo-error').removeClass('is-invalid campo-error');
+        $('.invalid-feedback').remove();
+        
+        const titulo = $('#editar_titulo').val().trim();
+        if (!titulo || titulo.length < 5 || titulo.length > 255) {
+            marcarCampoError('#editar_titulo', 'El título debe tener entre 5 y 255 caracteres');
+            errores.push('Título incorrecto');
+            isValid = false;
+        }
+        
+        const descripcion = $('#editar_descripcion').val().trim();
+        if (!descripcion || descripcion.length < 20 || descripcion.length > 1000) {
+            marcarCampoError('#editar_descripcion', 'La descripción debe tener entre 20 y 1000 caracteres');
+            errores.push('Descripción incorrecta');
+            isValid = false;
+        }
+        
+        if (!isValid) {
+            Swal.fire({
+                title: 'Errores',
+                text: errores.join(', '),
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+        }
+        
+        return isValid;
+    }
+
+    function limpiarFormularioEditar() {
+        $('#formEditarForo')[0].reset();
+        $('#contador_editar').text('0');
+        $('.is-invalid, .campo-error').removeClass('is-invalid campo-error');
+        $('.invalid-feedback').remove();
+    }
+
+    // ==================== VER MENSAJES ====================
+    function verMensajes(id) {
+        mostrarCarga();
+        
+        fetch('modales/foros/procesar_foros.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `accion=obtener_mensajes&id=${id}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            ocultarCarga();
+            
+            if (data.success) {
+                cargarMensajesForo(data.foro, data.mensajes);
+                $('#modalVerMensajes').modal('show');
+            } else {
+                mostrarError(data.message);
+            }
+        })
+        .catch(error => {
+            ocultarCarga();
+            console.error('Error:', error);
+            mostrarError('Error al cargar mensajes');
+        });
+    }
+
+    function cargarMensajesForo(foro, mensajes) {
+        $('#mensaje_foro_id').val(foro.id);
+        $('#titulo_foro_mensajes').text(foro.titulo);
+        $('#curso_foro_mensajes').text(foro.curso_nombre || foro.curso_completo);
+        
+        let stats = {};
+        if (typeof foro.estadisticas === 'string') {
+            try {
+                stats = JSON.parse(foro.estadisticas);
+            } catch (e) {
+                stats = {};
+            }
+        } else {
+            stats = foro.estadisticas || {};
+        }
+        
+        $('#total_mensajes_foro').text(mensajes.length);
+        $('#total_participantes_foro').text(stats.participantes || 0);
+        $('#ultimo_mensaje_foro').text(stats.mensaje_mas_reciente ? 
+            new Date(stats.mensaje_mas_reciente).toLocaleString('es-PE') : '-');
+        
+        renderizarMensajes(mensajes);
+    }
+
+    function renderizarMensajes(mensajes) {
+        const container = $('#listaMensajes');
+        container.empty();
+        
+        if (!mensajes || mensajes.length === 0) {
+            container.html(`
+                <div class="alert alert-info text-center">
+                    <i class="ti ti-message-off fs-1 mb-2 d-block"></i>
+                    <p class="mb-0">No hay mensajes en este foro aún. ¡Sé el primero en participar!</p>
+                </div>
+            `);
+            return;
+        }
+        
+        mensajes.forEach(mensaje => {
+            container.append(crearHtmlMensaje(mensaje));
+        });
+    }
+
+    function crearHtmlMensaje(mensaje) {
+        const fecha = new Date(mensaje.fecha_creacion).toLocaleString('es-PE');
+        const respuestas = mensaje.respuestas || [];
+        
+        let html = `
+            <div class="card mb-3">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <h6 class="mb-0">${mensaje.usuario_nombre || 'Usuario'}</h6>
+                            <small class="text-muted">${fecha}</small>
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary" onclick="responderMensaje(${mensaje.id}, '${mensaje.usuario_nombre}')">
+                            <i class="ti ti-corner-down-right"></i> Responder
+                        </button>
+                    </div>
+                    ${mensaje.titulo ? `<h6 class="text-primary">${mensaje.titulo}</h6>` : ''}
+                    <p class="mb-0">${mensaje.contenido}</p>
+                </div>
+            </div>
+        `;
+        
+        if (respuestas.length > 0) {
+            html += '<div class="ms-4">';
+            respuestas.forEach(respuesta => {
+                html += crearHtmlMensaje(respuesta);
+            });
+            html += '</div>';
+        }
+        
+        return html;
+    }
+
+    function responderMensaje(mensajeId, nombreUsuario) {
+        $('#mensaje_padre_id').val(mensajeId);
+        $('#respuesta_a').text(nombreUsuario);
+        $('#respuesta_info').show();
+        $('#mensaje_contenido').focus();
+    }
+
+    function cancelarRespuesta() {
+        $('#mensaje_padre_id').val('');
+        $('#respuesta_info').hide();
+    }
+
+    function validarFormularioMensaje() {
+        let isValid = true;
+        $('.is-invalid, .campo-error').removeClass('is-invalid campo-error');
+        $('.invalid-feedback').remove();
+        
+        const contenido = $('#mensaje_contenido').val().trim();
+        
+        if (!contenido || contenido.length < 10) {
+            marcarCampoError('#mensaje_contenido', 'El mensaje debe tener al menos 10 caracteres');
+            isValid = false;
+        } else if (contenido.length > 2000) {
+            marcarCampoError('#mensaje_contenido', 'El mensaje no puede superar los 2000 caracteres');
+            isValid = false;
+        }
+        
+        return isValid;
+    }
+
+    // ==================== CREAR FORO ====================
+    function validarFormularioCrearForo() {
+        let isValid = true;
+        let errores = [];
+        
+        $('.is-invalid, .campo-error').removeClass('is-invalid campo-error');
+        $('.invalid-feedback').remove();
+        
+        if (!$('#crear_curso').val()) {
+            marcarCampoError('#crear_curso', 'Seleccione un curso');
+            errores.push('Curso requerido');
+            isValid = false;
+        }
+        
+        const titulo = $('#crear_titulo').val().trim();
+        if (!titulo || titulo.length < 5 || titulo.length > 255) {
+            marcarCampoError('#crear_titulo', 'El título debe tener entre 5 y 255 caracteres');
+            errores.push('Título incorrecto');
+            isValid = false;
+        }
+        
+        const descripcion = $('#crear_descripcion').val().trim();
+        if (!descripcion || descripcion.length < 20 || descripcion.length > 1000) {
+            marcarCampoError('#crear_descripcion', 'La descripción debe tener entre 20 y 1000 caracteres');
+            errores.push('Descripción incorrecta');
+            isValid = false;
+        }
+        
+        if (!$('#crear_tipo').val()) {
+            marcarCampoError('#crear_tipo', 'Seleccione un tipo');
+            errores.push('Tipo requerido');
+            isValid = false;
+        }
+        
+        if (!isValid) {
+            Swal.fire({
+                title: 'Errores',
+                text: errores.join(', '),
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
+        }
+        
+        return isValid;
+    }
+
+    function limpiarFormularioCrear() {
+        $('#formCrearForo')[0].reset();
+        $('#contador_crear').text('0');
+        $('.is-invalid, .campo-error').removeClass('is-invalid campo-error');
+        $('.invalid-feedback').remove();
+    }
+
+    // ==================== TOGGLE ESTADO ====================
     function toggleEstadoForo(id, nuevoEstado) {
         const accion = nuevoEstado === 'ABIERTO' ? 'abrir' : 'cerrar';
         
@@ -698,32 +1171,13 @@
         })
         .catch(error => {
             ocultarCarga();
+            console.error('Error:', error);
             mostrarError('Error al cambiar estado del foro');
         });
     }
 
     function exportarForos() {
         window.open('reportes/exportar_foros.php', '_blank');
-    }
-
-    function mostrarExito(mensaje) {
-        Swal.fire({
-            title: '¡Éxito!',
-            text: mensaje,
-            icon: 'success',
-            confirmButtonColor: '#198754',
-            timer: 2000,
-            showConfirmButton: false
-        });
-    }
-
-    function mostrarError(mensaje) {
-        Swal.fire({
-            title: 'Error',
-            text: mensaje,
-            icon: 'error',
-            confirmButtonColor: '#dc3545'
-        });
     }
 </script>
 </body>
