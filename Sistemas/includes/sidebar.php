@@ -775,31 +775,23 @@
               </a>
               <ul aria-expanded="false" class="collapse first-level">
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="admisiones/formulario/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="postulaciones.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Formulario Postulación</span>
+                      <span class="hide-menu">Postulaciones</span>
                     </div>
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="admisiones/evaluacion/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="procesos_admision.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Evaluaciones</span>
+                      <span class="hide-menu">Procesos</span>
                     </div>
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="admisiones/lista-espera/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Lista de Espera</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="admisiones/comunicaciones/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="comunicaciones_admision.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Comunicaciones</span>
@@ -822,10 +814,10 @@
               </a>
               <ul aria-expanded="false" class="collapse first-level">
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="biblioteca/catalogo/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="biblioteca.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Catálogo</span>
+                      <span class="hide-menu">Biblioteca</span>
                     </div>
                   </a>
                 </li>
