@@ -822,65 +822,10 @@
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="biblioteca/prestamos/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="pretamos.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Préstamos y Devoluciones</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="biblioteca/multas/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Multas</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="biblioteca/inventario/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Inventario</span>
-                    </div>
-                  </a>
-                </li>
-              </ul>
-            </li>
-
-            <!-- 3.13 INVENTARIOS/ACTIVOS & MANTENIMIENTO -->
-            <li class="sidebar-item">
-              <a class="sidebar-link primary-hover-bg justify-content-between has-arrow" href="javascript:void(0)"
-                aria-expanded="false">
-                <div class="d-flex align-items-center gap-6">
-                  <span class="d-flex">
-                    <iconify-icon icon="solar:box-line-duotone"></iconify-icon>
-                  </span>
-                  <span class="hide-menu">Inventarios</span>
-                </div>
-              </a>
-              <ul aria-expanded="false" class="collapse first-level">
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="inventarios/activos/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Registro Activos</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="inventarios/ordenes/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Órdenes de Trabajo</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="inventarios/bitacora/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Bitácora Incidentes</span>
+                      <span class="hide-menu">Préstamos</span>
                     </div>
                   </a>
                 </li>
@@ -900,26 +845,10 @@
               </a>
               <ul aria-expanded="false" class="collapse first-level">
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="comedor/menus/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="comedor_menus.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Menús</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="comedor/pedidos/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Pedidos</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="comedor/saldos/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Control Saldos</span>
                     </div>
                   </a>
                 </li>
