@@ -1,73 +1,98 @@
 <?php
 session_start();
 require_once 'conexion/bd.php';
-// Obtener lista de estudiantes con sus matrículas activas
+
+// Verificar sesión
+if (!isset($_SESSION['usuario_id'])) {
+    header('Location: ../index.php');
+    exit();
+}
+
+$usuario_id = $_SESSION['usuario_id'];
+$usuario_nombre = $_SESSION['username'];
+
+// Obtener todas las atenciones médicas con información del estudiante
+try {
+    $sql = "SELECT 
+                am.*,
+                e.codigo_estudiante,
+                e.nombres as estudiante_nombres,
+                e.apellidos as estudiante_apellidos,
+                e.foto_url as estudiante_foto,
+                s.grado,
+                s.seccion,
+                n.nombre as nivel_nombre,
+                u.nombres as enfermero_nombres,
+                u.apellidos as enfermero_apellidos
+            FROM atenciones_medicas am
+            INNER JOIN estudiantes e ON am.estudiante_id = e.id
+            LEFT JOIN matriculas m ON e.id = m.estudiante_id AND m.activo = 1
+            LEFT JOIN secciones s ON m.seccion_id = s.id
+            LEFT JOIN niveles_educativos n ON s.nivel_id = n.id
+            LEFT JOIN usuarios u ON am.enfermero_atiende = u.id
+            ORDER BY am.fecha_atencion DESC, am.hora_atencion DESC";
+    $stmt_atenciones = $conexion->prepare($sql);
+    $stmt_atenciones->execute();
+    $atenciones_medicas = $stmt_atenciones->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $atenciones_medicas = [];
+    $error_atenciones = "Error al cargar atenciones: " . $e->getMessage();
+}
+
+// Obtener estudiantes activos
 try {
     $sql_estudiantes = "SELECT 
-        e.id, 
-        CONCAT(e.nombres, ' ', e.apellidos) as nombre_completo,
-        s.grado,
-        s.seccion
-    FROM estudiantes e
-    INNER JOIN matriculas m ON e.id = m.estudiante_id
-    INNER JOIN secciones s ON m.seccion_id = s.id
-    WHERE e.activo = 1 AND m.estado = 'MATRICULADO'
-    ORDER BY nombre_completo";
+                            e.id,
+                            e.codigo_estudiante,
+                            CONCAT(e.nombres, ' ', e.apellidos) as nombre_completo,
+                            s.grado,
+                            s.seccion,
+                            n.nombre as nivel_nombre
+                        FROM estudiantes e
+                        LEFT JOIN matriculas m ON e.id = m.estudiante_id AND m.activo = 1
+                        LEFT JOIN secciones s ON m.seccion_id = s.id
+                        LEFT JOIN niveles_educativos n ON s.nivel_id = n.id
+                        WHERE e.activo = 1
+                        ORDER BY e.apellidos ASC";
     $stmt_estudiantes = $conexion->prepare($sql_estudiantes);
     $stmt_estudiantes->execute();
-    $estudiantes = $stmt_estudiantes->fetchAll(PDO::FETCH_ASSOC);
+    $estudiantes_activos = $stmt_estudiantes->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    $estudiantes = [];
+    $estudiantes_activos = [];
 }
 
-// Obtener inventario de enfermería disponible
+// Obtener inventario activo
 try {
-    $sql_inventario = "SELECT * FROM inventario_enfermeria WHERE stock_actual > 0 ORDER BY nombre_producto";
+    $sql_inventario = "SELECT 
+                            id,
+                            nombre_producto,
+                            tipo,
+                            stock_actual
+                       FROM inventario_enfermeria
+                       WHERE activo = 1 AND stock_actual > 0
+                       ORDER BY nombre_producto ASC";
     $stmt_inventario = $conexion->prepare($sql_inventario);
     $stmt_inventario->execute();
-    $inventario = $stmt_inventario->fetchAll(PDO::FETCH_ASSOC);
+    $inventario_disponible = $stmt_inventario->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
-    $inventario = [];
-}
-
-// Obtener atenciones médicas recientes
-try {
-    $sql_atenciones = "SELECT 
-        am.*,
-        CONCAT(e.nombres, ' ', e.apellidos) as nombre_estudiante,
-        s.grado,
-        s.seccion
-    FROM atenciones_medicas am
-    INNER JOIN estudiantes e ON am.estudiante_id = e.id
-    INNER JOIN matriculas m ON e.id = m.estudiante_id
-    INNER JOIN secciones s ON m.seccion_id = s.id
-    WHERE m.estado = 'MATRICULADO'
-    ORDER BY am.fecha_atencion DESC, am.hora_atencion DESC
-    LIMIT 50";
-    $stmt_atenciones = $conexion->prepare($sql_atenciones);
-    $stmt_atenciones->execute();
-    $atenciones = $stmt_atenciones->fetchAll(PDO::FETCH_ASSOC);
-} catch (PDOException $e) {
-    $atenciones = [];
+    $inventario_disponible = [];
 }
 
 // Calcular estadísticas
-$total_atenciones = count($atenciones);
-$atenciones_urgentes = 0;
-$atenciones_normales = 0;
+$total_atenciones = count($atenciones_medicas);
 $atenciones_hoy = 0;
+$medicamentos_administrados = 0;
 
 $fecha_hoy = date('Y-m-d');
 
-foreach ($atenciones as $atencion) {
-    if ($atencion['tipo_atencion'] === 'urgente') {
-        $atenciones_urgentes++;
-    } else {
-        $atenciones_normales++;
+foreach ($atenciones_medicas as $atencion) {
+    if ($atencion['fecha_atencion'] == $fecha_hoy) {
+        $atenciones_hoy++;
     }
     
-    if ($atencion['fecha_atencion'] === $fecha_hoy) {
-        $atenciones_hoy++;
+    $tratamiento = json_decode($atencion['tratamiento'], true);
+    if (!empty($tratamiento)) {
+        $medicamentos_administrados++;
     }
 }
 ?>
@@ -77,7 +102,7 @@ foreach ($atenciones as $atencion) {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Atenciones y Control | ANDRÉS AVELINO CÁCERES</title>
+    <title>Atenciones y Control Médico | ANDRÉS AVELINO CÁCERES</title>
     <link rel="shortcut icon" type="image/png" href="../assets/images/logos/favicon.png" />
     <link rel="stylesheet" href="../assets/css/styles.min.css" />
     <link rel="stylesheet" href="assets/css/style.css" />
@@ -95,6 +120,18 @@ foreach ($atenciones as $atencion) {
         .card:hover {
             transform: translateY(-3px);
             box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .atencion-card {
+            border-left: 4px solid #B4E5D4;
+            background: #ffffff;
+        }
+
+        .header-section {
+            background: linear-gradient(135deg, #E5F0FF 0%, #FFE5F0 100%);
+            padding: 1.5rem;
+            border-radius: 12px;
+            margin-bottom: 2rem;
         }
 
         .stats-card {
@@ -119,38 +156,54 @@ foreach ($atenciones as $atencion) {
             letter-spacing: 1px;
         }
 
-        .color-stats-1 { color: #A8D8EA; }
-        .color-stats-2 { color: #C1E1C1; }
-        .color-stats-3 { color: #FFB6C1; }
-        .color-stats-4 { color: #FFFACD; }
+        .color-stats-1 { color: #FFB6C1; }
+        .color-stats-2 { color: #B4E5D4; }
+        .color-stats-3 { color: #FFE5B4; }
 
-        .badge-urgente {
-            background-color: #FFB6C1;
-            color: #c62828;
-            padding: 0.4rem 0.8rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-        
-        .badge-normal {
-            background-color: #C1E1C1;
-            color: #2e7d32;
-            padding: 0.4rem 0.8rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-
-        .table-custom {
-            background-color: #ffffff;
+        .btn-action {
             border-radius: 10px;
-            overflow: hidden;
+            padding: 0.8rem 1.5rem;
+            font-weight: 500;
+            border: none;
+            transition: all 0.3s;
         }
-        
-        .table-custom thead {
-            background: linear-gradient(135deg, #A8D8EA, #E6E6FA);
-            color: #2c3e50;
+
+        .btn-register {
+            background-color: #B3E5FC;
+            color: #01579B;
+        }
+
+        .btn-register:hover {
+            background-color: #81D4FA;
+            color: #01579B;
+        }
+
+        .btn-medicine {
+            background-color: #C8E6C9;
+            color: #1B5E20;
+        }
+
+        .btn-medicine:hover {
+            background-color: #A5D6A7;
+            color: #1B5E20;
+        }
+
+        .btn-view {
+            background-color: #F8BBD0;
+            color: #880E4F;
+        }
+
+        .btn-view:hover {
+            background-color: #F48FB1;
+            color: #880E4F;
+        }
+
+        .foto-estudiante {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid #FFE5F0;
         }
 
         .loading-overlay {
@@ -166,35 +219,24 @@ foreach ($atenciones as $atencion) {
             justify-content: center;
         }
 
-        .modal-header {
-            background: linear-gradient(135deg, #FFB6C1, #FFFACD);
-            border-radius: 15px 15px 0 0;
-            color: #2c3e50;
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #999;
         }
 
-        .form-control, .form-select {
-            border-radius: 10px;
-            border: 1px solid #E6E6FA;
-        }
-        
-        .form-control:focus, .form-select:focus {
-            border-color: #A8D8EA;
-            box-shadow: 0 0 0 0.2rem rgba(168, 216, 234, 0.25);
+        .empty-state i {
+            font-size: 4rem;
+            color: #ddd;
         }
 
-        .btn-action {
-            background: linear-gradient(135deg, #C1E1C1, #A8D8EA);
-            border: none;
-            color: #2c3e50;
-            padding: 0.6rem 1.5rem;
-            border-radius: 10px;
-            transition: all 0.3s;
-        }
-        
-        .btn-action:hover {
-            background: linear-gradient(135deg, #A8D8EA, #C1E1C1);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        .tipo-atencion-badge {
+            background: linear-gradient(135deg, #E5F0FF, #D4E5FF);
+            color: #01579B;
+            padding: 0.3rem 0.6rem;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 600;
         }
     </style>
 </head>
@@ -231,23 +273,20 @@ foreach ($atenciones as $atencion) {
                 <!-- Page Title -->
                 <div class="row">
                     <div class="col-12">
-                        <div class="d-flex align-items-center justify-content-between mb-4">
-                            <div>
-                                <h4 class="fw-bold mb-0">
-                                    <i class="ti ti-heart-pulse me-2"></i>
-                                    Atenciones y Control de Enfermería
-                                </h4>
-                                <p class="mb-0 text-muted">Gestión de atenciones médicas y control de inventario</p>
-                            </div>
-                            <div>
-                                <button type="button" class="btn btn-action me-2" data-bs-toggle="modal" data-bs-target="#modalNuevaAtencion">
-                                    <i class="ti ti-plus me-2"></i>
-                                    Nueva Atención
-                                </button>
-                                <button type="button" class="btn btn-action me-2" data-bs-toggle="modal" data-bs-target="#modalAdministrarMedicamento">
-                                    <i class="ti ti-pill me-2"></i>
-                                    Medicamento
-                                </button>
+                        <div class="header-section">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <div>
+                                    <h4 class="fw-bold mb-0">
+                                        <i class="ti ti-heart-pulse me-2"></i>
+                                        Atenciones y Control Médico
+                                    </h4>
+                                    <p class="mb-0 text-muted">Gestión de atenciones médicas e inventario de enfermería</p>
+                                </div>
+                                <div>
+                                    <span class="badge bg-light text-dark fs-6">
+                                        <i class="ti ti-user"></i> <?= htmlspecialchars($usuario_nombre) ?>
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -255,7 +294,7 @@ foreach ($atenciones as $atencion) {
 
                 <!-- Estadísticas -->
                 <div class="row mb-4">
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <div class="stats-card">
                             <div class="stats-number color-stats-1">
                                 <?= $total_atenciones ?>
@@ -263,28 +302,62 @@ foreach ($atenciones as $atencion) {
                             <div class="stats-label">Total Atenciones</div>
                         </div>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-4">
                         <div class="stats-card">
                             <div class="stats-number color-stats-2">
-                                <?= $atenciones_normales ?>
-                            </div>
-                            <div class="stats-label">Atenciones Normales</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="stats-card">
-                            <div class="stats-number color-stats-3">
-                                <?= $atenciones_urgentes ?>
-                            </div>
-                            <div class="stats-label">Atenciones Urgentes</div>
-                        </div>
-                    </div>
-                    <div class="col-md-3">
-                        <div class="stats-card">
-                            <div class="stats-number color-stats-4">
                                 <?= $atenciones_hoy ?>
                             </div>
                             <div class="stats-label">Atenciones Hoy</div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="stats-card">
+                            <div class="stats-number color-stats-3">
+                                <?= $medicamentos_administrados ?>
+                            </div>
+                            <div class="stats-label">Con Medicamentos</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Botones de Acción -->
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <button class="btn btn-action btn-register w-100" data-bs-toggle="modal" data-bs-target="#modalRegistrarAtencion">
+                            <i class="ti ti-plus-circle me-2"></i> Registrar Atención Médica
+                        </button>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-action btn-medicine w-100" data-bs-toggle="modal" data-bs-target="#modalAdministrarMedicamento">
+                            <i class="ti ti-pill me-2"></i> Administrar Medicamento
+                        </button>
+                    </div>
+                    <div class="col-md-4">
+                        <button class="btn btn-action btn-view w-100" onclick="cargarAtenciones()">
+                            <i class="ti ti-list me-2"></i> Ver Atenciones Registradas
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filtros -->
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Fecha</label>
+                                <input type="date" class="form-control" id="filtroFecha">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Buscar Estudiante</label>
+                                <input type="text" class="form-control" id="buscarEstudiante" placeholder="Buscar estudiante...">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">&nbsp;</label>
+                                <button type="button" class="btn btn-outline-secondary w-100" onclick="limpiarFiltros()">
+                                    <i class="ti ti-refresh me-2"></i>
+                                    Limpiar Filtros
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -293,50 +366,76 @@ foreach ($atenciones as $atencion) {
                 <div class="card">
                     <div class="card-body">
                         <h5 class="card-title mb-4">
-                            <i class="ti ti-clipboard-pulse me-2"></i>
-                            Registro de Atenciones Recientes
+                            <i class="ti ti-table me-2"></i>
+                            Listado de Atenciones
                         </h5>
                         <div class="table-responsive">
-                            <table class="table table-custom table-hover">
-                                <thead>
+                            <table class="table table-hover" id="tablaAtenciones">
+                                <thead style="background: linear-gradient(135deg, #E5F0FF, #FFE5F0);">
                                     <tr>
+                                        <th>ID</th>
+                                        <th>Estudiante</th>
                                         <th>Fecha</th>
                                         <th>Hora</th>
-                                        <th>Estudiante</th>
-                                        <th>Grado/Sección</th>
+                                        <th>Tipo Atención</th>
                                         <th>Motivo</th>
-                                        <th>Tipo</th>
+                                        <th>Enfermero</th>
                                         <th>Acciones</th>
                                     </tr>
                                 </thead>
-                                <tbody>
-                                    <?php if (empty($atenciones)): ?>
+                                <tbody id="bodyAtenciones">
+                                    <?php if (empty($atenciones_medicas)): ?>
                                         <tr>
-                                            <td colspan="7" class="text-center py-4">
-                                                <i class="ti ti-clipboard-off fs-1 text-muted"></i>
-                                                <p class="text-muted mt-2">No hay atenciones registradas</p>
+                                            <td colspan="8">
+                                                <div class="empty-state">
+                                                    <i class="ti ti-clipboard"></i>
+                                                    <h5 class="mt-3">No hay atenciones registradas</h5>
+                                                    <p>Comienza registrando la primera atención médica</p>
+                                                </div>
                                             </td>
                                         </tr>
                                     <?php else: ?>
-                                        <?php foreach ($atenciones as $atencion): ?>
-                                        <tr>
-                                            <td><?= date('d/m/Y', strtotime($atencion['fecha_atencion'])) ?></td>
-                                            <td><?= date('H:i', strtotime($atencion['hora_atencion'])) ?></td>
-                                            <td><?= htmlspecialchars($atencion['nombre_estudiante']) ?></td>
-                                            <td><?= htmlspecialchars($atencion['grado'] . ' - ' . $atencion['seccion']) ?></td>
-                                            <td><?= htmlspecialchars($atencion['motivo_consulta']) ?></td>
-                                            <td>
-                                                <span class="badge-<?= $atencion['tipo_atencion'] ?>">
-                                                    <?= strtoupper($atencion['tipo_atencion']) ?>
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <button type="button" class="btn btn-sm btn-outline-info" 
-                                                        onclick="verDetalle(<?= $atencion['id'] ?>)">
-                                                    <i class="ti ti-eye"></i>
-                                                </button>
-                                            </td>
-                                        </tr>
+                                        <?php foreach ($atenciones_medicas as $atencion): ?>
+                                            <tr class="atencion-row" 
+                                                data-fecha="<?= $atencion['fecha_atencion'] ?>" 
+                                                data-nombre="<?= strtolower($atencion['estudiante_apellidos'] . ' ' . $atencion['estudiante_nombres']) ?>">
+                                                <td><?= htmlspecialchars($atencion['id']) ?></td>
+                                                <td>
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <img src="<?= !empty($atencion['estudiante_foto']) ? $atencion['estudiante_foto'] : '../assets/images/profile/user-1.jpg' ?>" 
+                                                             class="foto-estudiante" alt="Estudiante">
+                                                        <div>
+                                                            <div class="fw-bold">
+                                                                <?= htmlspecialchars($atencion['estudiante_apellidos']) ?>
+                                                            </div>
+                                                            <small class="text-muted">
+                                                                <?= htmlspecialchars($atencion['estudiante_nombres']) ?>
+                                                            </small>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td><?= date('d/m/Y', strtotime($atencion['fecha_atencion'])) ?></td>
+                                                <td><?= date('H:i', strtotime($atencion['hora_atencion'])) ?></td>
+                                                <td>
+                                                    <span class="tipo-atencion-badge">
+                                                        <?= htmlspecialchars($atencion['tipo_atencion']) ?>
+                                                    </span>
+                                                </td>
+                                                <td><?= htmlspecialchars(substr($atencion['motivo_consulta'], 0, 50)) ?>...</td>
+                                                <td>
+                                                    <small>
+                                                        <?= htmlspecialchars($atencion['enfermero_nombres'] ?? 'N/A') ?>
+                                                        <?= htmlspecialchars($atencion['enfermero_apellidos'] ?? '') ?>
+                                                    </small>
+                                                </td>
+                                                <td>
+                                                    <button type="button" class="btn btn-sm btn-outline-info" 
+                                                            onclick="verDetallesAtencion(<?= $atencion['id'] ?>)" 
+                                                            title="Ver Detalles">
+                                                        <i class="ti ti-eye"></i>
+                                                    </button>
+                                                </td>
+                                            </tr>
                                         <?php endforeach; ?>
                                     <?php endif; ?>
                                 </tbody>
@@ -356,161 +455,10 @@ foreach ($atenciones as $atencion) {
         </div>
     </div>
 
-    <!-- Modal 1: Nueva Atención -->
-    <div class="modal fade" id="modalNuevaAtencion" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="ti ti-plus-circle me-2"></i>Registrar Nueva Atención</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <form id="formNuevaAtencion" method="POST" action="procesar_atencion.php">
-                    <div class="modal-body">
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Estudiante</label>
-                                <select name="estudiante_id" class="form-select" required>
-                                    <option value="">Seleccionar...</option>
-                                    <?php foreach ($estudiantes as $est): ?>
-                                    <option value="<?= $est['id'] ?>">
-                                        <?= htmlspecialchars($est['nombre_completo'] . ' - ' . $est['grado'] . ' ' . $est['seccion']) ?>
-                                    </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Tipo de Atención</label>
-                                <select name="tipo_atencion" class="form-select" required>
-                                    <option value="normal">Normal</option>
-                                    <option value="urgente">Urgente</option>
-                                </select>
-                            </div>
-                        </div>
-                        
-                        <div class="mb-3">
-                            <label class="form-label">Motivo de Consulta</label>
-                            <textarea name="motivo_consulta" class="form-control" rows="2" required></textarea>
-                        </div>
-
-                        <h6 class="mt-4 mb-3">Signos Vitales</h6>
-                        <div class="row">
-                            <div class="col-md-3 mb-3">
-                                <label class="form-label">Temperatura (°C)</label>
-                                <input type="number" name="temperatura" class="form-control" step="0.1" placeholder="36.5">
-                            </div>
-                            <div class="col-md-3 mb-3">
-                                <label class="form-label">Presión Arterial</label>
-                                <input type="text" name="presion_arterial" class="form-control" placeholder="120/80">
-                            </div>
-                            <div class="col-md-3 mb-3">
-                                <label class="form-label">Frecuencia Cardíaca</label>
-                                <input type="number" name="frecuencia_cardiaca" class="form-control" placeholder="70">
-                            </div>
-                            <div class="col-md-3 mb-3">
-                                <label class="form-label">Peso (kg)</label>
-                                <input type="number" name="peso" class="form-control" step="0.1" placeholder="45.5">
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Diagnóstico / Observaciones</label>
-                            <textarea name="diagnostico" class="form-control" rows="2" required></textarea>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Tratamiento Indicado</label>
-                            <textarea name="tratamiento" class="form-control" rows="2"></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-action">
-                            <i class="ti ti-device-floppy me-2"></i>Registrar
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal 2: Administrar Medicamento -->
-    <div class="modal fade" id="modalAdministrarMedicamento" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="ti ti-pill me-2"></i>Administrar Medicamento</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <form id="formAdministrarMedicamento" method="POST" action="procesar_medicamento.php">
-                    <div class="modal-body">
-                        <div class="mb-3">
-                            <label class="form-label">Estudiante</label>
-                            <select name="estudiante_id" class="form-select" required>
-                                <option value="">Seleccionar...</option>
-                                <?php foreach ($estudiantes as $est): ?>
-                                <option value="<?= $est['id'] ?>">
-                                    <?= htmlspecialchars($est['nombre_completo']) ?>
-                                </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Medicamento</label>
-                            <select name="medicamento_id" class="form-select" required>
-                                <option value="">Seleccionar...</option>
-                                <?php foreach ($inventario as $med): ?>
-                                <option value="<?= $med['id'] ?>">
-                                    <?= htmlspecialchars($med['nombre_producto'] . ' (Stock: ' . $med['stock_actual'] . ')') ?>
-                                </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Cantidad</label>
-                                <input type="number" name="cantidad" class="form-control" min="1" required>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label">Dosis</label>
-                                <input type="text" name="dosis" class="form-control" placeholder="1 tableta" required>
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label class="form-label">Observaciones</label>
-                            <textarea name="observaciones" class="form-control" rows="3"></textarea>
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                        <button type="submit" class="btn btn-action">
-                            <i class="ti ti-check me-2"></i>Administrar
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
-
-    <!-- Modal 3: Ver Detalle -->
-    <div class="modal fade" id="modalDetalleAtencion" tabindex="-1">
-        <div class="modal-dialog modal-lg">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title"><i class="ti ti-file-medical me-2"></i>Detalle de Atención</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="detalleAtencionContent">
-                    <!-- Contenido cargado dinámicamente -->
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
-                </div>
-            </div>
-        </div>
-    </div>
+    <!-- Incluir Modales -->
+    <?php include 'modales/atenciones_medicas/modal_registrar.php'; ?>
+    <?php include 'modales/atenciones_medicas/modal_administrar.php'; ?>
+    <?php include 'modales/atenciones_medicas/modal_detalles.php'; ?>
 
     <!-- Scripts -->
     <script src="../assets/libs/jquery/dist/jquery.min.js"></script>
@@ -521,20 +469,96 @@ foreach ($atenciones as $atencion) {
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
-        function verDetalle(atencionId) {
+        $(document).ready(function() {
+            $('#filtroFecha, #buscarEstudiante').on('change keyup', aplicarFiltros);
+        });
+
+        function aplicarFiltros() {
+            const fechaFiltro = $('#filtroFecha').val();
+            const busqueda = $('#buscarEstudiante').val().toLowerCase();
+
+            $('.atencion-row').each(function() {
+                const row = $(this);
+                const fecha = row.data('fecha');
+                const nombre = row.data('nombre');
+
+                let mostrar = true;
+
+                if (fechaFiltro && fecha !== fechaFiltro) {
+                    mostrar = false;
+                }
+
+                if (busqueda && !nombre.includes(busqueda)) {
+                    mostrar = false;
+                }
+
+                row.toggle(mostrar);
+            });
+        }
+
+        function limpiarFiltros() {
+            $('#filtroFecha, #buscarEstudiante').val('');
+            aplicarFiltros();
+        }
+
+        function cargarAtenciones() {
+            aplicarFiltros();
+            $('html, body').animate({
+                scrollTop: $("#tablaAtenciones").offset().top - 100
+            }, 500);
+        }
+
+        function mostrarCarga() {
             $('#loadingOverlay').css('display', 'flex');
+        }
+
+        function ocultarCarga() {
+            $('#loadingOverlay').hide();
+        }
+
+        function verDetallesAtencion(id) {
+            mostrarCarga();
             
-            fetch(`obtener_detalle_atencion.php?id=${atencionId}`)
-                .then(response => response.text())
-                .then(data => {
-                    $('#loadingOverlay').hide();
-                    $('#detalleAtencionContent').html(data);
-                    $('#modalDetalleAtencion').modal('show');
-                })
-                .catch(error => {
-                    $('#loadingOverlay').hide();
-                    Swal.fire('Error', 'No se pudo cargar el detalle', 'error');
-                });
+            fetch('modales/atenciones_medicas/procesar_atenciones.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `accion=obtener&id=${id}`
+            })
+            .then(response => response.json())
+            .then(data => {
+                ocultarCarga();
+                
+                if (data.success) {
+                    cargarDatosDetalles(data.atencion);
+                    $('#modalDetallesAtencion').modal('show');
+                } else {
+                    mostrarError(data.message);
+                }
+            })
+            .catch(error => {
+                ocultarCarga();
+                mostrarError('Error al obtener datos de la atención');
+            });
+        }
+
+        function mostrarExito(mensaje) {
+            Swal.fire({
+                title: '¡Éxito!',
+                text: mensaje,
+                icon: 'success',
+                confirmButtonColor: '#198754',
+                timer: 2000,
+                showConfirmButton: false
+            });
+        }
+
+        function mostrarError(mensaje) {
+            Swal.fire({
+                title: 'Error',
+                text: mensaje,
+                icon: 'error',
+                confirmButtonColor: '#dc3545'
+            });
         }
     </script>
 </body>

@@ -4,12 +4,12 @@ require_once '../../conexion/bd.php';
 
 header('Content-Type: application/json');
 
-if (!isset($_SESSION['id']) || empty($_SESSION['id'])) {
+if (!isset($_SESSION['usuario_id']) || empty($_SESSION['usuario_id'])) {
     echo json_encode(['success' => false, 'message' => 'No autenticado']);
     exit;
 }
 
-$usuario_id = $_SESSION['id'];
+$usuario_id = $_SESSION['usuario_id'];
 $accion = $_POST['accion'] ?? '';
 
 try {

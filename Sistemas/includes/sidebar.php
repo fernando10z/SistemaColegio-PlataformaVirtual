@@ -914,6 +914,14 @@
                     </div>
                   </a>
                 </li>
+                <li class="sidebar-item">
+                  <a class="sidebar-link primary-hover-bg" href="medicamentos_enfermeria.php">
+                    <div class="d-flex align-items-center gap-6">
+                      <span class="d-flex"><span class="icon-small"></span></span>
+                      <span class="hide-menu">Medicamentos</span>
+                    </div>
+                  </a>
+                </li>
               </ul>
             </li>
           </ul>

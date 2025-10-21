@@ -1,7 +1,7 @@
 <?php
 
+session_start();
 require_once 'Sistemas/conexion/bd.php';
-
 
 
 $error_message = "";

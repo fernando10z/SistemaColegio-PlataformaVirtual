@@ -534,6 +534,7 @@ foreach ($fichas_medicas as $ficha) {
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </div>
+            </div>
 
             </div>
         </div>
