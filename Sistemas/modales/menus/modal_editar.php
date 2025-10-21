@@ -366,160 +366,196 @@
 </div>
 
 <script>
-function cargarDatosEdicionMenu(menu) {
-    $('#edit_menu_id').val(menu.id);
-    $('#edit_fecha').val(menu.fecha);
-    $('#edit_precio').val(menu.configuracion.precio);
-    $('#edit_tipo_menu').val(menu.configuracion.tipo_menu);
-    $('#edit_descripcion_general').val(menu.configuracion.descripcion_general || '');
-    $('#edit_desc_count').text((menu.configuracion.descripcion_general || '').length);
-    
-    // Platos
-    const detalles = menu.detalles;
-    if (detalles.entrada) {
-        $('#edit_entrada_nombre').val(detalles.entrada.nombre);
-        $('#edit_entrada_calorias').val(detalles.entrada.calorias);
-        $('#edit_entrada_ingredientes').val(detalles.entrada.ingredientes);
+    function cargarDatosEdicionMenu(menu) {
+        console.log('Cargando menú:', menu); // Para debug
+        
+        // Información básica
+        $('#edit_menu_id').val(menu.id);
+        $('#edit_fecha').val(menu.fecha);
+        
+        // Configuración
+        const config = menu.configuracion || {};
+        $('#edit_precio').val(config.precio || 0);
+        $('#edit_tipo_menu').val(config.tipo_menu || 'REGULAR');
+        
+        // Descripción está en detalles, no en configuración
+        const detalles = menu.detalles || {};
+        $('#edit_descripcion_general').val(detalles.descripcion_general || '');
+        $('#edit_desc_count').text((detalles.descripcion_general || '').length);
+        
+        // Limpiar campos de platos primero
+        $('#edit_entrada_nombre, #edit_entrada_calorias, #edit_entrada_ingredientes').val('');
+        $('#edit_principal_nombre, #edit_principal_calorias, #edit_principal_ingredientes').val('');
+        $('#edit_guarnicion_nombre, #edit_guarnicion_calorias').val('');
+        $('#edit_postre_nombre, #edit_postre_calorias').val('');
+        $('#edit_bebida_nombre, #edit_bebida_calorias').val('');
+        
+        // Cargar platos desde el array
+        if (detalles.platos && Array.isArray(detalles.platos)) {
+            detalles.platos.forEach(function(plato) {
+                switch(plato.tipo) {
+                    case 'ENTRADA':
+                        $('#edit_entrada_nombre').val(plato.nombre || '');
+                        $('#edit_entrada_calorias').val(plato.calorias || 0);
+                        $('#edit_entrada_ingredientes').val(plato.ingredientes || '');
+                        break;
+                        
+                    case 'PRINCIPAL':
+                        $('#edit_principal_nombre').val(plato.nombre || '');
+                        $('#edit_principal_calorias').val(plato.calorias || 0);
+                        $('#edit_principal_ingredientes').val(plato.ingredientes || '');
+                        break;
+                        
+                    case 'GUARNICION':
+                        $('#edit_guarnicion_nombre').val(plato.nombre || '');
+                        $('#edit_guarnicion_calorias').val(plato.calorias || 0);
+                        break;
+                        
+                    case 'POSTRE':
+                        $('#edit_postre_nombre').val(plato.nombre || '');
+                        $('#edit_postre_calorias').val(plato.calorias || 0);
+                        break;
+                        
+                    case 'BEBIDA':
+                        $('#edit_bebida_nombre').val(plato.nombre || '');
+                        $('#edit_bebida_calorias').val(plato.calorias || 0);
+                        break;
+                }
+            });
+        }
+        
+        // Disponibilidad
+        const disponibilidad = menu.disponibilidad || {};
+        $('#edit_cantidad_disponible').val(disponibilidad.porciones_disponibles || 0);
+        $('#edit_cantidad_reservada').val(disponibilidad.porciones_reservadas || 0);
+        
+        // Horas están en configuración, no en disponibilidad
+        $('#edit_hora_inicio').val(config.hora_inicio || '12:00');
+        $('#edit_hora_fin').val(config.hora_fin || '14:00');
+        
+        // Estado del menú
+        const estado = disponibilidad.estado || 'DISPONIBLE';
+        $('input[name="estado_menu"]').prop('checked', false);
+        $('input[name="estado_menu"][value="' + estado + '"]').prop('checked', true);
+        
+        // Restricciones
+        $('input[name="restricciones[]"]').prop('checked', false);
+        if (config.restricciones && Array.isArray(config.restricciones)) {
+            config.restricciones.forEach(function(restriccion) {
+                $('input[name="restricciones[]"][value="' + restriccion + '"]').prop('checked', true);
+            });
+        }
+        
+        // Alérgenos
+        let alergenosStr = '';
+        if (config.alergenos && Array.isArray(config.alergenos)) {
+            alergenosStr = config.alergenos.join(', ');
+        }
+        $('#edit_alergenos').val(alergenosStr);
+        
+        // Calcular totales
+        calcularTotalesEdicion();
     }
-    
-    if (detalles.principal) {
-        $('#edit_principal_nombre').val(detalles.principal.nombre);
-        $('#edit_principal_calorias').val(detalles.principal.calorias);
-        $('#edit_principal_ingredientes').val(detalles.principal.ingredientes);
-    }
-    
-    if (detalles.guarnicion) {
-        $('#edit_guarnicion_nombre').val(detalles.guarnicion.nombre);
-        $('#edit_guarnicion_calorias').val(detalles.guarnicion.calorias);
-    }
-    
-    if (detalles.postre) {
-        $('#edit_postre_nombre').val(detalles.postre.nombre);
-        $('#edit_postre_calorias').val(detalles.postre.calorias);
-    }
-    
-    if (detalles.bebida) {
-        $('#edit_bebida_nombre').val(detalles.bebida.nombre);
-        $('#edit_bebida_calorias').val(detalles.bebida.calorias);
-    }
-    
-    // Disponibilidad
-    const disponibilidad = menu.disponibilidad;
-    $('#edit_cantidad_disponible').val(disponibilidad.cantidad_disponible);
-    $('#edit_cantidad_reservada').val(disponibilidad.cantidad_reservada || 0);
-    $('#edit_hora_inicio').val(disponibilidad.hora_inicio);
-    $('#edit_hora_fin').val(disponibilidad.hora_fin);
-    
-    // Estado
-    $('input[name="estado_menu"][value="' + disponibilidad.estado + '"]').prop('checked', true);
-    
-    // Restricciones
-    $('input[name="restricciones[]"]').prop('checked', false);
-    if (menu.configuracion.restricciones) {
-        menu.configuracion.restricciones.forEach(function(restriccion) {
-            $('input[name="restricciones[]"][value="' + restriccion + '"]').prop('checked', true);
+
+    function calcularTotalesEdicion() {
+        let totalCalorias = 0;
+        let totalPlatos = 0;
+        
+        const caloriasInputs = [
+            '#edit_entrada_calorias',
+            '#edit_principal_calorias',
+            '#edit_guarnicion_calorias',
+            '#edit_postre_calorias',
+            '#edit_bebida_calorias'
+        ];
+        
+        caloriasInputs.forEach(input => {
+            const valor = parseInt($(input).val()) || 0;
+            if (valor > 0) {
+                totalCalorias += valor;
+                totalPlatos++;
+            }
         });
+        
+        const cantidad = parseInt($('#edit_cantidad_disponible').val()) || 0;
+        const precio = parseFloat($('#edit_precio').val()) || 0;
+        
+        $('#edit_total_calorias').text(totalCalorias);
+        $('#edit_total_platos').text(totalPlatos);
+        $('#edit_total_porciones').text(cantidad);
+        $('#edit_precio_display').text('S/ ' + precio.toFixed(2));
     }
-    
-    $('#edit_alergenos').val(menu.configuracion.alergenos || '');
-    
-    calcularTotalesEdicion();
-}
 
-function calcularTotalesEdicion() {
-    let totalCalorias = 0;
-    let totalPlatos = 0;
-    
-    const caloriasInputs = [
-        '#edit_entrada_calorias',
-        '#edit_principal_calorias',
-        '#edit_guarnicion_calorias',
-        '#edit_postre_calorias',
-        '#edit_bebida_calorias'
-    ];
-    
-    caloriasInputs.forEach(input => {
-        const valor = parseInt($(input).val()) || 0;
-        if (valor > 0) {
-            totalCalorias += valor;
-            totalPlatos++;
-        }
-    });
-    
-    const cantidad = parseInt($('#edit_cantidad_disponible').val()) || 0;
-    const precio = parseFloat($('#edit_precio').val()) || 0;
-    
-    $('#edit_total_calorias').text(totalCalorias);
-    $('#edit_total_platos').text(totalPlatos);
-    $('#edit_total_porciones').text(cantidad);
-    $('#edit_precio_display').text('S/ ' + precio.toFixed(2));
-}
+    $(document).ready(function() {
+        // Contador de caracteres
+        $('#edit_descripcion_general').on('input', function() {
+            $('#edit_desc_count').text($(this).val().length);
+        });
+        
+        // Actualizar totales al cambiar campos
+        $('#formEditarMenu input[type="number"]').on('input', calcularTotalesEdicion);
+        
+        // Validar horas
+        $('#edit_hora_inicio, #edit_hora_fin').on('change', function() {
+            const inicio = $('#edit_hora_inicio').val();
+            const fin = $('#edit_hora_fin').val();
+            
+            if (inicio && fin && fin <= inicio) {
+                $('#edit_hora_fin')[0].setCustomValidity('La hora de fin debe ser posterior al inicio');
+            } else {
+                $('#edit_hora_fin')[0].setCustomValidity('');
+            }
+        });
 
-$(document).ready(function() {
-    $('#edit_descripcion_general').on('input', function() {
-        $('#edit_desc_count').text($(this).val().length);
-    });
-    
-    $('#formEditarMenu input[type="number"]').on('input', calcularTotalesEdicion);
-    
-    $('#edit_hora_inicio, #edit_hora_fin').on('change', function() {
-        const inicio = $('#edit_hora_inicio').val();
-        const fin = $('#edit_hora_fin').val();
-        
-        if (inicio && fin && fin <= inicio) {
-            $('#edit_hora_fin')[0].setCustomValidity('La hora de fin debe ser posterior al inicio');
-        } else {
-            $('#edit_hora_fin')[0].setCustomValidity('');
-        }
-    });
-
-    $('#formEditarMenu').on('submit', function(e) {
-        e.preventDefault();
-        
-        if (!this.checkValidity()) {
-            e.stopPropagation();
-            $(this).addClass('was-validated');
-            return;
-        }
-        
-        $('#btnActualizarMenu').prop('disabled', true).html('<i class="ti ti-loader me-2"></i> Actualizando...');
-        
-        $.ajax({
-            url: 'modales/comedor/procesar_menu.php',
-            method: 'POST',
-            data: $(this).serialize(),
-            dataType: 'json',
-            success: function(response) {
-                if (response.success) {
-                    Swal.fire({
-                        title: '¡Éxito!',
-                        text: response.message,
-                        icon: 'success',
-                        confirmButtonColor: '#198754'
-                    }).then(() => {
-                        location.reload();
-                    });
-                } else {
+        // Envío del formulario
+        $('#formEditarMenu').on('submit', function(e) {
+            e.preventDefault();
+            
+            if (!this.checkValidity()) {
+                e.stopPropagation();
+                $(this).addClass('was-validated');
+                return;
+            }
+            
+            $('#btnActualizarMenu').prop('disabled', true).html('<i class="ti ti-loader me-2"></i> Actualizando...');
+            
+            $.ajax({
+                url: 'modales/menus/procesar_menu.php',
+                method: 'POST',
+                data: $(this).serialize(),
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success) {
+                        Swal.fire({
+                            title: '¡Éxito!',
+                            text: response.message,
+                            icon: 'success',
+                            confirmButtonColor: '#198754'
+                        }).then(() => {
+                            location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            title: 'Error',
+                            text: response.message,
+                            icon: 'error',
+                            confirmButtonColor: '#dc3545'
+                        });
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Error AJAX:', xhr.responseText);
                     Swal.fire({
                         title: 'Error',
-                        text: response.message,
+                        text: 'Error de conexión con el servidor',
                         icon: 'error',
                         confirmButtonColor: '#dc3545'
                     });
+                },
+                complete: function() {
+                    $('#btnActualizarMenu').prop('disabled', false).html('<i class="ti ti-device-floppy me-2"></i> Actualizar Menú');
                 }
-            },
-            error: function() {
-                Swal.fire({
-                    title: 'Error',
-                    text: 'Error de conexión con el servidor',
-                    icon: 'error',
-                    confirmButtonColor: '#dc3545'
-                });
-            },
-            complete: function() {
-                $('#btnActualizarMenu').prop('disabled', false).html('<i class="ti ti-device-floppy me-2"></i> Actualizar Menú');
-            }
+            });
         });
     });
-});
 </script>

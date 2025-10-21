@@ -431,6 +431,18 @@
                                                     if (empty($nombre_plato)) continue;
                                                     $info_icono = $iconos_platos[$tipo_plato] ?? ['icon' => '🍴', 'class' => 'icon-entrada'];
                                                 ?>
+                                                    <?php
+                                                        // Asegurarse de que $nombre_plato sea una cadena antes de pasar a htmlspecialchars
+                                                        $nombre_display = $nombre_plato;
+                                                        if (is_array($nombre_display)) {
+                                                            // Aplanar arrays anidados y convertir cada valor a string
+                                                            $flat = [];
+                                                            array_walk_recursive($nombre_display, function($v) use (&$flat) {
+                                                                $flat[] = (string)$v;
+                                                            });
+                                                            $nombre_display = implode(', ', $flat);
+                                                        }
+                                                    ?>
                                                     <div class="plato-item">
                                                         <div class="plato-icon <?= $info_icono['class'] ?>">
                                                             <?= $info_icono['icon'] ?>
@@ -439,7 +451,7 @@
                                                             <small class="text-muted d-block" style="font-size: 0.7rem;">
                                                                 <?= ucfirst(str_replace('_', ' ', $tipo_plato)) ?>
                                                             </small>
-                                                            <div><?= htmlspecialchars($nombre_plato) ?></div>
+                                                            <div><?= htmlspecialchars((string)$nombre_display, ENT_QUOTES, 'UTF-8') ?></div>
                                                         </div>
                                                     </div>
                                                 <?php endforeach; ?>
@@ -620,7 +632,7 @@
         function editarMenu(id) {
             mostrarCarga();
             
-            fetch('modales/menus/procesar_menus.php', {
+            fetch('modales/menus/procesar_menu.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: `accion=obtener&id=${id}`
@@ -645,7 +657,7 @@
         function verDetallesMenu(id) {
             mostrarCarga();
             
-            fetch('modales/menus/procesar_menus.php', {
+            fetch('modales/menus/procesar_menu.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: `accion=detalles_completos&id=${id}`
@@ -680,7 +692,7 @@
                 if (result.isConfirmed) {
                     mostrarCarga();
                     
-                    fetch('modales/menus/procesar_menus.php', {
+                    fetch('modales/menus/procesar_menu.php', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                         body: `accion=eliminar&id=${id}`

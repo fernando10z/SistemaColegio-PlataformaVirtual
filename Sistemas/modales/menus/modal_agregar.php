@@ -431,7 +431,7 @@ $(document).ready(function() {
         $('#btnGuardarMenu').prop('disabled', true).html('<i class="ti ti-loader me-2"></i> Guardando...');
         
         $.ajax({
-            url: 'modales/comedor/procesar_menu.php',
+            url: 'modales/menus/procesar_menu.php',
             method: 'POST',
             data: $(this).serialize(),
             dataType: 'json',

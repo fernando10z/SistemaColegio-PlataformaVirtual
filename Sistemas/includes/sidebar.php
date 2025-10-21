@@ -1,4 +1,4 @@
-    <!-- Sidebar Start -->
+<!-- Sidebar Start -->
     <aside class="left-sidebar">
       <!-- Sidebar scroll-->
       <div>
@@ -821,14 +821,14 @@
                     </div>
                   </a>
                 </li>
-                <li class="sidebar-item">
+                <!-- <li class="sidebar-item">
                   <a class="sidebar-link primary-hover-bg" href="pretamos.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Préstamos</span>
                     </div>
                   </a>
-                </li>
+                </li> -->
               </ul>
             </li>
 
@@ -868,26 +868,18 @@
               </a>
               <ul aria-expanded="false" class="collapse first-level">
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="transporte/rutas/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="gestion_rutas.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Rutas y Paraderos</span>
+                      <span class="hide-menu">Gestón de Rutas</span>
                     </div>
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="transporte/asignaciones/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="vehiculos_transporte.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Asignaciones</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="transporte/asistencia/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Asistencia en Bus</span>
+                      <span class="hide-menu">Vehículos</span>
                     </div>
                   </a>
                 </li>
@@ -907,7 +899,7 @@
               </a>
               <ul aria-expanded="false" class="collapse first-level">
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="enfermeria/fichas/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="fichas_medicas.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Fichas Médicas</span>
@@ -915,26 +907,10 @@
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="enfermeria/atenciones/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="atenciones_enfermeria.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Atenciones</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="enfermeria/autorizaciones/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Autorizaciones</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="enfermeria/alertas/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Alertas</span>
                     </div>
                   </a>
                 </li>
