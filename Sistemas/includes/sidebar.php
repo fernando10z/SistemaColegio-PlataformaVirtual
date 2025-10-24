@@ -246,7 +246,7 @@
             </li>
 
             <!-- 3.3 EVALUACIONES Y TAREAS -->
-            <li class="nav-small-cap">
+            <!-- <li class="nav-small-cap">
               <iconify-icon icon="solar:clipboard-check-line-duotone" class="nav-small-cap-icon fs-4"></iconify-icon>
               <span class="hide-menu">Evaluaciones y Tareas</span>
             </li>
@@ -389,14 +389,14 @@
                   </a>
                 </li>
               </ul>
-            </li>
+            </li> -->
 
-            <li>
+            <!-- <li>
               <span class="sidebar-divider lg"></span>
-            </li>
+            </li> -->
 
             <!-- 3.4 CALIFICACIONES (GRADEBOOK) -->
-            <li class="nav-small-cap">
+            <!-- <li class="nav-small-cap">
               <iconify-icon icon="solar:calculator-line-duotone" class="nav-small-cap-icon fs-4"></iconify-icon>
               <span class="hide-menu">Calificaciones</span>
             </li>
@@ -502,14 +502,14 @@
                   </a>
                 </li>
               </ul>
-            </li>
+            </li> -->
 
-            <li>
+            <!-- <li>
               <span class="sidebar-divider lg"></span>
-            </li>
+            </li> -->
 
             <!-- 3.5 ASISTENCIA Y DISCIPLINA -->
-            <li class="nav-small-cap">
+            <!-- <li class="nav-small-cap">
               <iconify-icon icon="solar:user-check-line-duotone" class="nav-small-cap-icon fs-4"></iconify-icon>
               <span class="hide-menu">Asistencia y Disciplina</span>
             </li>
@@ -590,7 +590,7 @@
 
             <li>
               <span class="sidebar-divider lg"></span>
-            </li>
+            </li> -->
 
             <!-- <li class="nav-small-cap">
               <iconify-icon icon="solar:chat-dots-line-duotone" class="nav-small-cap-icon fs-4"></iconify-icon>
@@ -612,10 +612,10 @@
                 <span class="hide-menu">Anuncios Sistema</span>
               </a>
             </li> -->
-
+<!-- 
             <li>
               <span class="sidebar-divider lg"></span>
-            </li>
+            </li> -->
 
             <!-- 3.7 ANALÍTICA Y TABLEROS -->
             <li class="nav-small-cap">
@@ -634,7 +634,7 @@
               </a>
               <ul aria-expanded="false" class="collapse first-level">
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="analitica/docente/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="docente_dashboard.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Dashboard Docente</span>
@@ -642,7 +642,7 @@
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="analitica/estudiante/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="estudiante_dashboard.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Dashboard Estudiante</span>
@@ -650,7 +650,7 @@
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="analitica/directivo/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="directivo_dashboard.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Dashboard Directivo</span>
@@ -714,7 +714,7 @@
                 </li>
               </ul>
             </li>
-            <li class="sidebar-item">
+            <!-- <li class="sidebar-item">
               <a class="sidebar-link primary-hover-bg justify-content-between has-arrow" href="javascript:void(0)"
                 aria-expanded="false">
                 <div class="d-flex align-items-center gap-6">
@@ -750,7 +750,7 @@
                   </a>
                 </li>
               </ul>
-            </li>
+            </li> -->
 
             <li>
               <span class="sidebar-divider lg"></span>
