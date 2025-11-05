@@ -1,6 +1,4 @@
-<?php
-// modales/usuarios/modal_agregar.php
-?>
+
 <!-- Modal Agregar Usuario -->
 <div class="modal fade" id="modalAgregarUsuario" tabindex="-1" aria-labelledby="modalAgregarUsuarioLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
