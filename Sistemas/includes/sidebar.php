@@ -1,4 +1,4 @@
-    <!-- Sidebar Start -->
+<!-- Sidebar Start -->
     <aside class="left-sidebar">
       <!-- Sidebar scroll-->
       <div>
@@ -178,7 +178,7 @@
               </a>
               <ul aria-expanded="false" class="collapse first-level">
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="eva/cursos/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="cursos.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Mis Cursos</span>
@@ -186,7 +186,7 @@
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="eva/unidades/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="unidades.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Unidades</span>
@@ -194,7 +194,7 @@
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="eva/lecciones/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="lecciones.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Lecciones</span>
@@ -202,7 +202,7 @@
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="eva/recursos/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="recursos.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Recursos</span>
@@ -223,7 +223,7 @@
               </a>
               <ul aria-expanded="false" class="collapse first-level">
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="eva/foros/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="foros.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Foros</span>
@@ -231,7 +231,7 @@
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="eva/anuncios/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="anuncios.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Anuncios</span>
@@ -240,21 +240,13 @@
                 </li>
               </ul>
             </li>
-            <li class="sidebar-item">
-              <a class="sidebar-link primary-hover-bg" href="eva/repositorio/index.php" aria-expanded="false">
-                <span class="d-flex">
-                  <iconify-icon icon="solar:folder-line-duotone"></iconify-icon>
-                </span>
-                <span class="hide-menu">Repositorio</span>
-              </a>
-            </li>
 
             <li>
               <span class="sidebar-divider lg"></span>
             </li>
 
             <!-- 3.3 EVALUACIONES Y TAREAS -->
-            <li class="nav-small-cap">
+            <!-- <li class="nav-small-cap">
               <iconify-icon icon="solar:clipboard-check-line-duotone" class="nav-small-cap-icon fs-4"></iconify-icon>
               <span class="hide-menu">Evaluaciones y Tareas</span>
             </li>
@@ -397,14 +389,14 @@
                   </a>
                 </li>
               </ul>
-            </li>
+            </li> -->
 
-            <li>
+            <!-- <li>
               <span class="sidebar-divider lg"></span>
-            </li>
+            </li> -->
 
             <!-- 3.4 CALIFICACIONES (GRADEBOOK) -->
-            <li class="nav-small-cap">
+            <!-- <li class="nav-small-cap">
               <iconify-icon icon="solar:calculator-line-duotone" class="nav-small-cap-icon fs-4"></iconify-icon>
               <span class="hide-menu">Calificaciones</span>
             </li>
@@ -510,14 +502,14 @@
                   </a>
                 </li>
               </ul>
-            </li>
+            </li> -->
 
-            <li>
+            <!-- <li>
               <span class="sidebar-divider lg"></span>
-            </li>
+            </li> -->
 
             <!-- 3.5 ASISTENCIA Y DISCIPLINA -->
-            <li class="nav-small-cap">
+            <!-- <li class="nav-small-cap">
               <iconify-icon icon="solar:user-check-line-duotone" class="nav-small-cap-icon fs-4"></iconify-icon>
               <span class="hide-menu">Asistencia y Disciplina</span>
             </li>
@@ -598,10 +590,9 @@
 
             <li>
               <span class="sidebar-divider lg"></span>
-            </li>
+            </li> -->
 
-            <!-- 3.6 COMUNICACIÓN Y COLABORACIÓN -->
-            <li class="nav-small-cap">
+            <!-- <li class="nav-small-cap">
               <iconify-icon icon="solar:chat-dots-line-duotone" class="nav-small-cap-icon fs-4"></iconify-icon>
               <span class="hide-menu">Comunicación</span>
             </li>
@@ -620,11 +611,11 @@
                 </span>
                 <span class="hide-menu">Anuncios Sistema</span>
               </a>
-            </li>
-
+            </li> -->
+<!-- 
             <li>
               <span class="sidebar-divider lg"></span>
-            </li>
+            </li> -->
 
             <!-- 3.7 ANALÍTICA Y TABLEROS -->
             <li class="nav-small-cap">
@@ -643,7 +634,7 @@
               </a>
               <ul aria-expanded="false" class="collapse first-level">
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="analitica/docente/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="docente_dashboard.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Dashboard Docente</span>
@@ -651,7 +642,7 @@
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="analitica/estudiante/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="estudiante_dashboard.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Dashboard Estudiante</span>
@@ -659,7 +650,7 @@
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="analitica/directivo/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="directivo_dashboard.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Dashboard Directivo</span>
@@ -723,7 +714,7 @@
                 </li>
               </ul>
             </li>
-            <li class="sidebar-item">
+            <!-- <li class="sidebar-item">
               <a class="sidebar-link primary-hover-bg justify-content-between has-arrow" href="javascript:void(0)"
                 aria-expanded="false">
                 <div class="d-flex align-items-center gap-6">
@@ -759,7 +750,7 @@
                   </a>
                 </li>
               </ul>
-            </li>
+            </li> -->
 
             <li>
               <span class="sidebar-divider lg"></span>
@@ -784,31 +775,23 @@
               </a>
               <ul aria-expanded="false" class="collapse first-level">
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="admisiones/formulario/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="postulaciones.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Formulario Postulación</span>
+                      <span class="hide-menu">Postulaciones</span>
                     </div>
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="admisiones/evaluacion/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="procesos_admision.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Evaluaciones</span>
+                      <span class="hide-menu">Procesos</span>
                     </div>
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="admisiones/lista-espera/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Lista de Espera</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="admisiones/comunicaciones/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="comunicaciones_admision.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Comunicaciones</span>
@@ -831,76 +814,21 @@
               </a>
               <ul aria-expanded="false" class="collapse first-level">
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="biblioteca/catalogo/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="biblioteca.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Catálogo</span>
+                      <span class="hide-menu">Biblioteca</span>
                     </div>
                   </a>
                 </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="biblioteca/prestamos/index.php">
+                <!-- <li class="sidebar-item">
+                  <a class="sidebar-link primary-hover-bg" href="pretamos.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Préstamos y Devoluciones</span>
+                      <span class="hide-menu">Préstamos</span>
                     </div>
                   </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="biblioteca/multas/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Multas</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="biblioteca/inventario/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Inventario</span>
-                    </div>
-                  </a>
-                </li>
-              </ul>
-            </li>
-
-            <!-- 3.13 INVENTARIOS/ACTIVOS & MANTENIMIENTO -->
-            <li class="sidebar-item">
-              <a class="sidebar-link primary-hover-bg justify-content-between has-arrow" href="javascript:void(0)"
-                aria-expanded="false">
-                <div class="d-flex align-items-center gap-6">
-                  <span class="d-flex">
-                    <iconify-icon icon="solar:box-line-duotone"></iconify-icon>
-                  </span>
-                  <span class="hide-menu">Inventarios</span>
-                </div>
-              </a>
-              <ul aria-expanded="false" class="collapse first-level">
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="inventarios/activos/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Registro Activos</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="inventarios/ordenes/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Órdenes de Trabajo</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="inventarios/bitacora/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Bitácora Incidentes</span>
-                    </div>
-                  </a>
-                </li>
+                </li> -->
               </ul>
             </li>
 
@@ -917,26 +845,10 @@
               </a>
               <ul aria-expanded="false" class="collapse first-level">
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="comedor/menus/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="comedor_menus.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Menús</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="comedor/pedidos/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Pedidos</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="comedor/saldos/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Control Saldos</span>
                     </div>
                   </a>
                 </li>
@@ -956,26 +868,18 @@
               </a>
               <ul aria-expanded="false" class="collapse first-level">
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="transporte/rutas/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="gestion_rutas.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Rutas y Paraderos</span>
+                      <span class="hide-menu">Gestón de Rutas</span>
                     </div>
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="transporte/asignaciones/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="vehiculos_transporte.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Asignaciones</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="transporte/asistencia/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Asistencia en Bus</span>
+                      <span class="hide-menu">Vehículos</span>
                     </div>
                   </a>
                 </li>
@@ -995,7 +899,7 @@
               </a>
               <ul aria-expanded="false" class="collapse first-level">
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="enfermeria/fichas/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="fichas_medicas.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Fichas Médicas</span>
@@ -1003,7 +907,7 @@
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="enfermeria/atenciones/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="atenciones_enfermeria.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
                       <span class="hide-menu">Atenciones</span>
@@ -1011,18 +915,10 @@
                   </a>
                 </li>
                 <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="enfermeria/autorizaciones/index.php">
+                  <a class="sidebar-link primary-hover-bg" href="medicamentos_enfermeria.php">
                     <div class="d-flex align-items-center gap-6">
                       <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Autorizaciones</span>
-                    </div>
-                  </a>
-                </li>
-                <li class="sidebar-item">
-                  <a class="sidebar-link primary-hover-bg" href="enfermeria/alertas/index.php">
-                    <div class="d-flex align-items-center gap-6">
-                      <span class="d-flex"><span class="icon-small"></span></span>
-                      <span class="hide-menu">Alertas</span>
+                      <span class="hide-menu">Medicamentos</span>
                     </div>
                   </a>
                 </li>
