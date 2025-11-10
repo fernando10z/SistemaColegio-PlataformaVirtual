@@ -483,7 +483,7 @@ $json_estudiantes_grado = json_encode($estudiantes_por_grado);
                         <div>
                             <h3 class="fw-bold mb-2">
                                 <i class="ti ti-dashboard me-2"></i>
-                                Panel de Control - Director
+                                Panel de Control
                             </h3>
                             <p class="mb-0 text-muted">Vista general del desempeño académico e institucional</p>
                         </div>
