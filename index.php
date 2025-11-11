@@ -9,13 +9,15 @@ $colegio_ruc    = '';
 $colegio_foto   = '';
 
 try {
-    $stmt_cp = $conexion->prepare("SELECT nombre, ruc, foto FROM colegio_principal WHERE id = 1 LIMIT 1");
+    $stmt_cp = $conexion->prepare("SELECT nombre, ruc, foto, direccion, refran FROM colegio_principal WHERE id = 1 LIMIT 1");
     $stmt_cp->execute();
     $colegio = $stmt_cp->fetch(PDO::FETCH_ASSOC);
     if ($colegio) {
         $colegio_nombre = isset($colegio['nombre']) ? $colegio['nombre'] : '';
         $colegio_ruc    = isset($colegio['ruc']) ? $colegio['ruc'] : '';
         $colegio_foto   = isset($colegio['foto']) ? $colegio['foto'] : '';
+        $colegio_direccion = isset($colegio['direccion']) ? $colegio['direccion'] : '';
+        $refran = isset($colegio['refran']) ? $colegio['refran'] : '';
     }
 } catch (PDOException $e) {
     error_log("Error fetching colegio_principal: " . $e->getMessage());
@@ -25,6 +27,8 @@ try {
 $nombre = $colegio_nombre;
 $ruc    = $colegio_ruc;
 $foto   = $colegio_foto;
+$direccion = $colegio_direccion;
+$refran = $refran;
 
 $error_message = "";
 $success_message = "";
@@ -129,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $favicon = !empty($foto) ? htmlspecialchars($foto) : 'assets/favicons/favicon-32x32.png';
     ?>
     <link rel="short icon" type="image/png" sizes="32x32" href="<?php echo $favicon; ?>">
-    <meta name="theme-color" content="#1e293b">
+    <meta name="theme-color" content="#1a5f7a">
     <style>
         * {
             margin: 0;
@@ -138,30 +142,42 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         :root {
-            --primary: #1e293b;
-            --primary-dark: #0f172a;
-            --accent: #3b82f6;
-            --accent-hover: #2563eb;
+            /* Colores institucionales del escudo */
+            --primary: #1a5f7a;
+            --primary-dark: #134556;
+            --primary-light: #2a7a96;
+            --accent: #c8102e;
+            --accent-hover: #a00d25;
+            --gold: #d4af37;
+            
+            /* Neutrales */
             --surface: #ffffff;
-            --gray-50: #f8fafc;
-            --gray-100: #f1f5f9;
-            --gray-200: #e2e8f0;
-            --gray-300: #cbd5e1;
-            --gray-400: #94a3b8;
-            --gray-500: #64748b;
-            --gray-600: #475569;
-            --gray-700: #334155;
-            --error: #ef4444;
-            --success: #22c55e;
+            --gray-50: #fafafa;
+            --gray-100: #f5f5f5;
+            --gray-200: #eeeeee;
+            --gray-300: #e0e0e0;
+            --gray-400: #bdbdbd;
+            --gray-500: #9e9e9e;
+            --gray-600: #757575;
+            --gray-700: #616161;
+            --gray-800: #424242;
+            --gray-900: #212121;
+            
+            /* Estados */
+            --error: #d32f2f;
+            --error-light: #ffebee;
+            --success: #388e3c;
+            --success-light: #e8f5e9;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
             min-height: 100vh;
             display: flex;
-            background: var(--surface);
-            color: var(--primary);
+            background: var(--gray-50);
+            color: var(--gray-900);
             line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
         }
 
         .container {
@@ -170,52 +186,43 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             min-height: 100vh;
         }
 
-        /* Panel izquierdo - Visual */
+        /* Panel izquierdo - Institucional */
         .left-panel {
-            flex: 1.2;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            flex: 1;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
             position: relative;
             display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            padding: 60px;
+            padding: 60px 40px;
             overflow: hidden;
         }
 
-        /* Patrón geométrico minimalista */
+        /* Patrón sutil de fondo */
         .left-panel::before {
             content: '';
             position: absolute;
             inset: 0;
             background-image: 
-                radial-gradient(circle at 25% 25%, rgba(255,255,255,0.2) 0%, transparent 50%),
-                radial-gradient(circle at 75% 75%, rgba(255,255,255,0.15) 0%, transparent 50%);
-            background-size: 100% 100%;
+                radial-gradient(circle at 20% 30%, rgba(255,255,255,0.08) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(255,255,255,0.06) 0%, transparent 50%);
+            pointer-events: none;
         }
 
-        .left-panel::after {
-            content: '';
-            position: absolute;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 50%;
-            background: linear-gradient(to top, rgba(15,23,42,0.2), transparent);
-        }
-
-        .brand-container {
+        .institutional-content {
             position: relative;
             z-index: 1;
             text-align: center;
             color: white;
+            max-width: 480px;
             animation: fadeInUp 0.8s ease-out;
         }
 
         @keyframes fadeInUp {
             from {
                 opacity: 0;
-                transform: translateY(30px);
+                transform: translateY(20px);
             }
             to {
                 opacity: 1;
@@ -223,82 +230,65 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
         }
 
-        .brand-icon {
-            width: 100px;
-            height: 100px;
-            background: rgba(255,255,255,0.2);
-            backdrop-filter: blur(10px);
-            border-radius: 24px;
+        /* Logo institucional */
+        .school-logo {
+            width: 140px;
+            height: 140px;
+            margin: 0 auto 32px;
+            background: white;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
             display: flex;
             align-items: center;
             justify-content: center;
-            margin: 0 auto 32px;
-            border: 1px solid rgba(255,255,255,0.3);
         }
 
-        .brand-icon svg {
-            width: 56px;
-            height: 56px;
-            color: white;
+        .school-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
         }
 
-        .brand-title {
-            font-size: 32px;
+        .school-name {
+            font-size: 28px;
             font-weight: 700;
-            margin-bottom: 16px;
-            letter-spacing: -0.5px;
+            margin-bottom: 12px;
+            letter-spacing: -0.3px;
+            line-height: 1.3;
         }
 
-        .brand-subtitle {
-            font-size: 18px;
+        .school-motto {
+            font-size: 16px;
             opacity: 0.9;
             font-weight: 400;
-            margin-bottom: 48px;
+            margin-bottom: 40px;
+            line-height: 1.5;
         }
 
-        .features {
+        .institutional-info {
             display: flex;
             flex-direction: column;
-            gap: 24px;
-            max-width: 400px;
-        }
-
-        .feature {
-            display: flex;
-            align-items: center;
-            gap: 16px;
+            gap: 12px;
+            padding: 24px;
             background: rgba(255,255,255,0.1);
             backdrop-filter: blur(10px);
-            padding: 20px;
             border-radius: 12px;
             border: 1px solid rgba(255,255,255,0.2);
         }
 
-        .feature-icon {
-            width: 40px;
-            height: 40px;
-            background: rgba(255,255,255,0.2);
-            border-radius: 10px;
+        .info-item {
             display: flex;
             align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .feature-text {
-            flex: 1;
-        }
-
-        .feature-text h3 {
-            font-size: 16px;
-            margin-bottom: 4px;
-            font-weight: 600;
-        }
-
-        .feature-text p {
+            gap: 12px;
             font-size: 14px;
-            opacity: 0.9;
-            line-height: 1.4;
+            opacity: 0.95;
+        }
+
+        .info-icon {
+            width: 20px;
+            height: 20px;
+            opacity: 0.8;
         }
 
         /* Panel derecho - Formulario */
@@ -308,12 +298,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             align-items: center;
             justify-content: center;
             padding: 40px;
-            background: var(--gray-50);
+            background: white;
         }
 
         .login-container {
             width: 100%;
-            max-width: 440px;
+            max-width: 420px;
         }
 
         .login-header {
@@ -321,68 +311,71 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         .login-header h2 {
-            font-size: 28px;
+            font-size: 26px;
             font-weight: 700;
-            color: var(--primary-dark);
+            color: var(--gray-900);
             margin-bottom: 8px;
+            letter-spacing: -0.3px;
         }
 
         .login-header p {
-            color: var(--gray-500);
-            font-size: 16px;
+            color: var(--gray-600);
+            font-size: 15px;
         }
 
         /* Mensajes */
         .alert {
-            padding: 12px 16px;
+            padding: 14px 16px;
             border-radius: 8px;
             margin-bottom: 24px;
             font-size: 14px;
             display: flex;
-            align-items: center;
-            gap: 10px;
+            align-items: flex-start;
+            gap: 12px;
             animation: slideIn 0.3s ease-out;
+            line-height: 1.5;
         }
 
         @keyframes slideIn {
             from {
                 opacity: 0;
-                transform: translateX(-10px);
+                transform: translateY(-8px);
             }
             to {
                 opacity: 1;
-                transform: translateX(0);
+                transform: translateY(0);
             }
         }
 
         .alert-error {
-            background: #fee2e2;
-            color: #991b1b;
-            border: 1px solid #fecaca;
+            background: var(--error-light);
+            color: var(--error);
+            border: 1px solid #ffcdd2;
         }
 
         .alert-success {
-            background: #d1fae5;
-            color: #065f46;
-            border: 1px solid #a7f3d0;
+            background: var(--success-light);
+            color: var(--success);
+            border: 1px solid #c8e6c9;
         }
 
         .alert svg {
             width: 20px;
             height: 20px;
             flex-shrink: 0;
+            margin-top: 1px;
         }
 
         /* Formulario */
         .form-group {
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
 
         .form-label {
             display: block;
             font-size: 14px;
-            font-weight: 500;
-            color: var(--gray-700);
+            font-weight: 600;
+            color: var(--gray-800);
             margin-bottom: 8px;
         }
 
@@ -394,20 +387,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             width: 100%;
             padding: 12px 16px;
             font-size: 15px;
-            border: 1px solid var(--gray-200);
+            border: 1.5px solid var(--gray-300);
             background: var(--surface);
             border-radius: 8px;
             transition: all 0.2s ease;
             outline: none;
+            color: var(--gray-900);
+        }
+
+        .form-input::placeholder {
+            color: var(--gray-400);
         }
 
         .form-input:hover {
-            border-color: var(--gray-300);
+            border-color: var(--gray-400);
         }
 
         .form-input:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(26, 95, 122, 0.1);
         }
 
         .password-toggle {
@@ -417,17 +415,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             transform: translateY(-50%);
             background: none;
             border: none;
-            color: var(--gray-400);
+            color: var(--gray-500);
             cursor: pointer;
             padding: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: color 0.2s;
+            border-radius: 4px;
         }
 
         .password-toggle:hover {
-            color: var(--gray-600);
+            color: var(--gray-700);
+            background: var(--gray-100);
         }
 
         .password-toggle svg {
@@ -453,31 +453,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         .checkbox {
             width: 18px;
             height: 18px;
-            accent-color: var(--accent);
+            accent-color: var(--primary);
             cursor: pointer;
         }
 
         .checkbox-label {
-            color: var(--gray-600);
+            color: var(--gray-700);
             cursor: pointer;
             user-select: none;
         }
 
         .link {
-            color: var(--accent);
+            color: var(--primary);
             text-decoration: none;
             font-weight: 500;
             transition: color 0.2s;
         }
 
         .link:hover {
-            color: var(--accent-hover);
+            color: var(--primary-dark);
         }
 
         /* Botón principal */
         .btn-primary {
             width: 100%;
-            padding: 12px 24px;
+            padding: 13px 24px;
             font-size: 15px;
             font-weight: 600;
             color: white;
@@ -493,7 +493,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         .btn-primary:hover {
             background: var(--accent-hover);
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+            box-shadow: 0 4px 12px rgba(200, 16, 46, 0.3);
         }
 
         .btn-primary:active {
@@ -501,7 +501,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
 
         .btn-primary:disabled {
-            opacity: 0.5;
+            opacity: 0.6;
             cursor: not-allowed;
             transform: none;
         }
@@ -528,53 +528,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             to { transform: rotate(360deg); }
         }
 
-        /* Separador */
-        .divider {
-            display: flex;
-            align-items: center;
-            margin: 32px 0;
-            gap: 16px;
-        }
-
-        .divider::before,
-        .divider::after {
-            content: '';
-            flex: 1;
-            height: 1px;
-            background: var(--gray-200);
-        }
-
-        .divider span {
-            color: var(--gray-400);
-            font-size: 13px;
-            font-weight: 500;
-        }
-
-        /* Link de registro */
-        .register-section {
-            text-align: center;
-            padding: 24px;
-            background: var(--surface);
-            border-radius: 8px;
-            border: 1px solid var(--gray-200);
-        }
-
-        .register-section p {
-            color: var(--gray-600);
-            font-size: 15px;
-            margin-bottom: 8px;
-        }
-
-        .register-section .link {
-            font-size: 16px;
-        }
-
         /* Footer */
         .footer {
             margin-top: 48px;
+            padding-top: 24px;
+            border-top: 1px solid var(--gray-200);
             text-align: center;
             font-size: 13px;
-            color: var(--gray-400);
+            color: var(--gray-500);
+        }
+
+        .footer p {
+            margin-bottom: 4px;
         }
 
         /* Responsive */
@@ -584,14 +549,24 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
             
             .right-panel {
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: var(--gray-50);
             }
             
             .login-container {
-                background: var(--surface);
+                background: white;
                 padding: 40px;
                 border-radius: 16px;
-                box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+                box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+            }
+
+            /* Mostrar logo en mobile */
+            .login-container::before {
+                content: '';
+                display: block;
+                width: 80px;
+                height: 80px;
+                margin: 0 auto 32px;
+                background: url('<?php echo htmlspecialchars($foto); ?>') center/contain no-repeat;
             }
         }
 
@@ -609,65 +584,45 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 gap: 12px;
                 align-items: flex-start;
             }
+
+            .login-header h2 {
+                font-size: 24px;
+            }
         }
     </style>
 </head>
 
 <body>
     <div class="container">
-        <!-- Panel izquierdo - Visual -->
+        <!-- Panel izquierdo - Institucional -->
         <div class="left-panel">
-            <div class="brand-container">
-                <div class="brand-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                        <path d="M12 2L2 7L12 12L22 7L12 2Z"></path>
-                        <path d="M2 17L12 22L22 17"></path>
-                        <path d="M2 12L12 17L22 12"></path>
-                    </svg>
+            <div class="institutional-content">
+                <div class="school-logo">
+                    <img src="<?php echo htmlspecialchars($foto); ?>" alt="Escudo de <?php echo htmlspecialchars($nombre); ?>">
                 </div>
-                <h1 class="brand-title">Bienvenido de vuelta</h1>
-                <p class="brand-subtitle">Sistema de Gestión Educativa</p>
                 
-                <div class="features">
-                    <div class="feature">
-                        <div class="feature-icon">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-                                <line x1="8" y1="21" x2="16" y2="21"></line>
-                                <line x1="12" y1="17" x2="12" y2="21"></line>
-                            </svg>
-                        </div>
-                        <div class="feature-text">
-                            <h3>Plataforma Digital</h3>
-                            <p>Acceso completo al sistema educativo desde cualquier dispositivo</p>
-                        </div>
+                <h1 class="school-name">
+                    <?php echo htmlspecialchars($nombre); ?>
+                </h1>
+                
+                <p class="school-motto">
+                    Sistema de Gestión Educativa Digital
+                </p>
+                
+                <div class="institutional-info">
+                    <div class="info-item">
+                        <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                        </svg>
+                        <span><?php echo htmlspecialchars($direccion); ?></span>
                     </div>
-                    
-                    <div class="feature">
-                        <div class="feature-icon">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                                <circle cx="9" cy="7" r="4"></circle>
-                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                            </svg>
-                        </div>
-                        <div class="feature-text">
-                            <h3>Comunidad Educativa</h3>
-                            <p>Conecta con docentes, estudiantes y apoderados en un solo lugar</p>
-                        </div>
-                    </div>
-                    
-                    <div class="feature">
-                        <div class="feature-icon">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                            </svg>
-                        </div>
-                        <div class="feature-text">
-                            <h3>Seguro y Confiable</h3>
-                            <p>Tus datos están protegidos con los más altos estándares de seguridad</p>
-                        </div>
+                    <div class="info-item">
+                        <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                        </svg>
+                        <span><?php echo htmlspecialchars($refran); ?></span>
                     </div>
                 </div>
             </div>
@@ -678,7 +633,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             <div class="login-container">
                 <div class="login-header">
                     <h2>Iniciar sesión</h2>
-                    <p>Ingresa tus credenciales para acceder al sistema</p>
+                    <p>Ingresa tus credenciales para acceder</p>
                 </div>
 
                 <!-- Mensajes de error/éxito -->
@@ -689,7 +644,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                             <line x1="12" y1="8" x2="12" y2="12"></line>
                             <line x1="12" y1="16" x2="12.01" y2="16"></line>
                         </svg>
-                        <?php echo htmlspecialchars($error_message); ?>
+                        <span><?php echo htmlspecialchars($error_message); ?></span>
                     </div>
                 <?php endif; ?>
                 
@@ -698,7 +653,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <polyline points="20 6 9 17 4 12"></polyline>
                         </svg>
-                        <?php echo htmlspecialchars($success_message); ?>
+                        <span><?php echo htmlspecialchars($success_message); ?></span>
                     </div>
                 <?php endif; ?>
 
@@ -733,7 +688,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                                 required
                                 autocomplete="current-password"
                             >
-                            <button type="button" class="password-toggle" id="togglePassword">
+                            <button type="button" class="password-toggle" id="togglePassword" aria-label="Mostrar contraseña">
                                 <svg class="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
                                     <circle cx="12" cy="12" r="3"></circle>
@@ -759,18 +714,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     </button>
                 </form>
 
-                <!-- <div class="divider">
-                    <span>¿Eres nuevo?</span>
-                </div>
-
-                <div class="register-section">
-                    <p>¿Primera vez en nuestra plataforma?</p>
-                    <a href="registro.php" class="link">Solicita tu acceso aquí</a>
-                </div> -->
-
                 <div class="footer">
-                    <p>© <?php echo date('Y'); ?> I.E. Andrés Avelino Cáceres</p>
-                    <p>Todos los derechos reservados</p>
+                    <p><strong>I.E. <?php echo htmlspecialchars($nombre); ?></strong></p>
+                    <p>© <?php echo date('Y'); ?> Todos los derechos reservados</p>
                 </div>
             </div>
         </div>

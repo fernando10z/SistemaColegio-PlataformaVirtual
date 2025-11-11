@@ -1,12 +1,12 @@
 <?php 
     session_start();
 
-// Redirigir al index si no hay sesión iniciada
-if (session_status() !== PHP_SESSION_ACTIVE
-  || (!isset($_SESSION['usuario_id']) && !isset($_SESSION['usuario_id']) && empty($_SESSION['login_time']))) {
-  header('Location: ../index.php');
-  exit;
-}
+    // Redirigir al index si no hay sesión iniciada
+    if (session_status() !== PHP_SESSION_ACTIVE
+    || (!isset($_SESSION['usuario_id']) && !isset($_SESSION['usuario_id']) && empty($_SESSION['login_time']))) {
+    header('Location: ../index.php');
+    exit;
+    }
 
     require_once 'conexion/bd.php';
 

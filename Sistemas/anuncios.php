@@ -1,5 +1,4 @@
 <?php 
-
 session_start();
 
 // Redirigir al index si no hay sesión iniciada
