@@ -21,7 +21,7 @@ if (isset($_SESSION['usuario_id'])) {
         // Registrar en auditoría (si existe la tabla)
         $stmt = $conexion->prepare("
             INSERT INTO auditoria_sistema 
-            (usuario_id, modulo, accion, tabla_afectada, fecha_accion, detalles)
+            (usuario_id, modulo, accion, tabla_afectada, fecha_eventos, detalles)
             VALUES (?, ?, ?, ?, NOW(), ?)
         ");
         

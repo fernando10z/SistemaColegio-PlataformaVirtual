@@ -9,6 +9,28 @@ if (session_status() !== PHP_SESSION_ACTIVE
 }
 require_once 'conexion/bd.php';
 
+                    try {
+    $stmt_cp = $conexion->prepare("SELECT nombre, ruc, foto, direccion, refran FROM colegio_principal WHERE id = 1 LIMIT 1");
+    $stmt_cp->execute();
+    $colegio = $stmt_cp->fetch(PDO::FETCH_ASSOC);
+    if ($colegio) {
+        $colegio_nombre = isset($colegio['nombre']) ? $colegio['nombre'] : '';
+        $colegio_ruc    = isset($colegio['ruc']) ? $colegio['ruc'] : '';
+        $colegio_foto   = isset($colegio['foto']) ? $colegio['foto'] : '';
+        $colegio_direccion = isset($colegio['direccion']) ? $colegio['direccion'] : '';
+        $refran = isset($colegio['refran']) ? $colegio['refran'] : '';
+    }
+} catch (PDOException $e) {
+    error_log("Error fetching colegio_principal: " . $e->getMessage());
+}
+
+// Variables solicitadas (nombre, ruc, foto)
+$nombre = $colegio_nombre;
+$ruc    = $colegio_ruc;
+$foto   = $colegio_foto;
+$direccion = $colegio_direccion;
+$refran = $refran;
+
 // Obtener período académico activo
 try {
     $sql_periodo = "SELECT id, nombre FROM periodos_academicos WHERE activo = 1 LIMIT 1";
@@ -109,8 +131,11 @@ $promedio_estudiantes = $rutas_activas > 0 ? round($total_estudiantes_transporte
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Gestión de Transporte Escolar | ANDRÉS AVELINO CÁCERES</title>
-    <link rel="shortcut icon" type="image/png" href="../assets/images/logos/favicon.png" />
+    <title>Gestión de Transporte Escolar - <?php echo $nombre; ?></title>
+    <?php
+        $favicon = !empty($foto) ? htmlspecialchars($foto) : 'assets/favicons/favicon-32x32.png';
+    ?>
+    <link rel="shortcut icon" type="image/png" sizes="32x32" href="../<?php echo $favicon; ?>">
     <link rel="stylesheet" href="../assets/css/styles.min.css" />
     <link rel="stylesheet" href="assets/css/style.css" />
     <style>
