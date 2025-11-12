@@ -45,6 +45,10 @@ try {
         case 'validar_sistema':
             $response = ejecutarValidacionesSistema();
             break;
+
+        case 'validar_edades':
+            $response = validarEdadesEstudiantes();
+            break;
         
         default:
             throw new Exception('Acción no válida');
@@ -500,5 +504,154 @@ function calcularEdad($fechaNacimiento) {
     $nacimiento = new DateTime($fechaNacimiento);
     $hoy = new DateTime();
     return $hoy->diff($nacimiento)->y;
+}
+
+function validarEdadesEstudiantes() {
+    global $conexion;
+    
+    try {
+        $errores = [];
+        $advertencias = [];
+        
+        // 1. Validar niveles sin grados configurados
+        $sql = "SELECT nombre FROM niveles_educativos 
+                WHERE activo = 1 AND (grados IS NULL OR grados = '[]' OR grados = '')";
+        $stmt = $conexion->prepare($sql);
+        $stmt->execute();
+        $sinGrados = $stmt->fetchAll(PDO::FETCH_COLUMN);
+        
+        foreach ($sinGrados as $nivel) {
+            $errores[] = "El nivel '{$nivel}' no tiene grados configurados";
+        }
+        
+        // 2. Validar estudiantes con edades fuera del rango del grado
+        $sql = "SELECT e.id, e.nombres, e.apellidos, e.fecha_nacimiento, 
+                       s.grado, ne.nombre as nivel, ne.grados
+                FROM estudiantes e
+                INNER JOIN matriculas m ON e.id = m.estudiante_id
+                INNER JOIN secciones s ON m.seccion_id = s.id
+                INNER JOIN niveles_educativos ne ON s.nivel_id = ne.id
+                WHERE m.estado = 'MATRICULADO' AND m.activo = 1 AND ne.activo = 1
+                ORDER BY ne.orden, s.grado";
+        $stmt = $conexion->prepare($sql);
+        $stmt->execute();
+        $estudiantes = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $estudiantesFueraRango = 0;
+        
+        foreach ($estudiantes as $estudiante) {
+            $edad = calcularEdad($estudiante['fecha_nacimiento']);
+            $grados = json_decode($estudiante['grados'], true) ?: [];
+            
+            // Buscar el grado correspondiente
+            $gradoEncontrado = false;
+            $edadMin = null;
+            $edadMax = null;
+            
+            foreach ($grados as $grado) {
+                if ($grado['nombre'] == $estudiante['grado']) {
+                    $gradoEncontrado = true;
+                    $edadMin = $grado['edad_min'];
+                    $edadMax = $grado['edad_max'];
+                    break;
+                }
+            }
+            
+            if ($gradoEncontrado) {
+                // Validar si la edad está dentro del rango
+                if ($edad < $edadMin || $edad > $edadMax) {
+                    $estudiantesFueraRango++;
+                    $advertencias[] = "Estudiante {$estudiante['nombres']} {$estudiante['apellidos']} ({$edad} años) está fuera del rango de edad para {$estudiante['grado']} del nivel {$estudiante['nivel']} (Rango: {$edadMin}-{$edadMax} años)";
+                }
+            } else {
+                $errores[] = "El grado '{$estudiante['grado']}' no está configurado en el nivel '{$estudiante['nivel']}'";
+            }
+        }
+        
+        // 3. Validar solapamientos de edades entre niveles diferentes
+        $sql = "SELECT id, nombre, grados, orden FROM niveles_educativos WHERE activo = 1 ORDER BY orden";
+        $stmt = $conexion->prepare($sql);
+        $stmt->execute();
+        $niveles = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        
+        $solapamientos = 0;
+        
+        for ($i = 0; $i < count($niveles); $i++) {
+            $grados1 = json_decode($niveles[$i]['grados'], true) ?: [];
+            
+            for ($j = $i + 1; $j < count($niveles); $j++) {
+                $grados2 = json_decode($niveles[$j]['grados'], true) ?: [];
+                
+                foreach ($grados1 as $grado1) {
+                    foreach ($grados2 as $grado2) {
+                        if (isset($grado1['edad_min']) && isset($grado2['edad_min'])) {
+                            // Verificar solapamiento
+                            if (($grado1['edad_min'] >= $grado2['edad_min'] && $grado1['edad_min'] <= $grado2['edad_max']) ||
+                                ($grado1['edad_max'] >= $grado2['edad_min'] && $grado1['edad_max'] <= $grado2['edad_max']) ||
+                                ($grado2['edad_min'] >= $grado1['edad_min'] && $grado2['edad_min'] <= $grado1['edad_max'])) {
+                                
+                                $solapamientos++;
+                                $advertencias[] = "Solapamiento de edades: '{$niveles[$i]['nombre']}' - {$grado1['nombre']} ({$grado1['edad_min']}-{$grado1['edad_max']} años) vs '{$niveles[$j]['nombre']}' - {$grado2['nombre']} ({$grado2['edad_min']}-{$grado2['edad_max']} años)";
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        // 4. Validar grados sin rangos de edad definidos
+        $gradosSinEdades = 0;
+        foreach ($niveles as $nivel) {
+            $grados = json_decode($nivel['grados'], true) ?: [];
+            foreach ($grados as $grado) {
+                if (!isset($grado['edad_min']) || !isset($grado['edad_max'])) {
+                    $gradosSinEdades++;
+                    $errores[] = "El grado '{$grado['nombre']}' del nivel '{$nivel['nombre']}' no tiene rangos de edad definidos";
+                }
+            }
+        }
+        
+        // 5. Resumen de validaciones
+        $resumen = [];
+        if (!empty($errores)) {
+            $resumen[] = "Se encontraron " . count($errores) . " error(es) crítico(s)";
+        }
+        if (!empty($advertencias)) {
+            $resumen[] = "Se encontraron " . count($advertencias) . " advertencia(s)";
+        }
+        if ($estudiantesFueraRango > 0) {
+            $resumen[] = "{$estudiantesFueraRango} estudiante(s) con edad fuera del rango de su grado";
+        }
+        if ($solapamientos > 0) {
+            $resumen[] = "{$solapamientos} solapamiento(s) de edades entre niveles detectados";
+        }
+        
+        // Limitar advertencias para no saturar la UI (máximo 20)
+        if (count($advertencias) > 20) {
+            $advertenciasMostradas = array_slice($advertencias, 0, 20);
+            $advertenciasMostradas[] = "... y " . (count($advertencias) - 20) . " advertencia(s) adicionales";
+            $advertencias = $advertenciasMostradas;
+        }
+        
+        return [
+            'success' => true,
+            'validaciones' => [
+                'errores' => $errores,
+                'advertencias' => $advertencias,
+                'resumen' => $resumen,
+                'ok' => empty($errores) && empty($advertencias),
+                'estadisticas' => [
+                    'total_niveles' => count($niveles),
+                    'estudiantes_validados' => count($estudiantes),
+                    'estudiantes_fuera_rango' => $estudiantesFueraRango,
+                    'solapamientos' => $solapamientos,
+                    'grados_sin_edades' => $gradosSinEdades
+                ]
+            ]
+        ];
+        
+    } catch (Exception $e) {
+        throw new Exception('Error al validar edades: ' . $e->getMessage());
+    }
 }
 ?>

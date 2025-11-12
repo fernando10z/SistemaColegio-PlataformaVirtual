@@ -502,25 +502,7 @@ foreach ($carga_por_docente as $docente_id => $info) {
             <div class="container-fluid">
                 
                 <!-- Header -->
-                <header class="app-header">
-                    <nav class="navbar navbar-expand-lg navbar-light">
-                        <ul class="navbar-nav">
-                            <li class="nav-item d-block d-xl-none">
-                                <a class="nav-link sidebartoggler" id="headerCollapse" href="javascript:void(0)">
-                                    <i class="ti ti-menu-2"></i>
-                                </a>
-                            </li>
-                        </ul>
-                        <div class="navbar-collapse justify-content-end px-0" id="navbarNav">
-                            <ul class="navbar-nav flex-row ms-auto align-items-center justify-content-end">
-                                <li class="nav-item">
-                                    <span class="badge bg-primary fs-2 rounded-4 lh-sm">Sistema AAC</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </nav>
-                </header>
-
+                <?php include 'includes/header.php'; ?>
                 <!-- Page Title -->
                 <div class="row">
                     <div class="col-12">
@@ -1164,7 +1146,93 @@ foreach ($carga_por_docente as $docente_id => $info) {
         }
 
         function exportarAsignaciones() {
-            window.open('reportes/exportar_asignaciones.php', '_blank');
+            // Capturar solo las filas visibles (filtradas)
+            const filasVisibles = [];
+            
+            $('#tablaAsignaciones tbody tr:visible').each(function() {
+                const fila = $(this);
+                
+                // Docente (nombre + código)
+                const nombre_docente = fila.find('.docente-nombre').text().trim();
+                const codigo_docente = fila.find('.docente-codigo').text().trim();
+                const docente = nombre_docente + '\n' + codigo_docente;
+                
+                // Sección (nivel + grado-sección + aula)
+                const nivel_nombre = fila.find('.seccion-nombre').text().trim();
+                const grado_seccion = fila.find('.seccion-detalles').contents().first().text().trim();
+                const aula = fila.find('.seccion-detalles small').text().trim();
+                const seccion = nivel_nombre + '\n' + grado_seccion + '\n' + aula;
+                
+                // Área (código + nombre)
+                const area_codigo = fila.find('.badge.area-badge').text().trim();
+                const area_nombre = fila.find('td:eq(2) small').text().trim();
+                const area = area_codigo + '\n' + area_nombre;
+                
+                // Carga horaria
+                const carga_numero = fila.find('.carga-numero').text().trim();
+                const carga = carga_numero + '\npor semana';
+                
+                // Estudiantes
+                const estudiantes = fila.find('.estudiantes-numero').text().trim();
+                
+                // Tutoría
+                const tutoria_badge = fila.find('.tutor-badge').text().trim();
+                const tutoria = tutoria_badge;
+                
+                // Horarios
+                let horarios = '';
+                const horarios_items = fila.find('.horario-item');
+                if (horarios_items.length > 0) {
+                    const horarios_array = [];
+                    horarios_items.each(function() {
+                        horarios_array.push($(this).text().trim());
+                    });
+                    horarios = horarios_array.join('\n');
+                } else {
+                    horarios = fila.find('.horario-preview small').text().trim();
+                    if (!horarios) {
+                        horarios = 'Sin horarios definidos';
+                    }
+                }
+                
+                // Construir array con datos de la fila
+                filasVisibles.push([
+                    docente,      // 0
+                    seccion,      // 1
+                    area,         // 2
+                    carga,        // 3
+                    estudiantes,  // 4
+                    tutoria,      // 5
+                    horarios      // 6
+                ]);
+            });
+            
+            // Verificar si hay datos para exportar
+            if (filasVisibles.length === 0) {
+                Swal.fire({
+                    title: 'Sin datos',
+                    text: 'No hay asignaciones visibles para exportar. Ajusta los filtros.',
+                    icon: 'warning',
+                    confirmButtonColor: '#fd7e14'
+                });
+                return;
+            }
+            
+            // Crear formulario y enviar datos
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = 'reportes/exportar_asignaciones.php';
+            form.target = '_blank';
+            
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'datosAsignaciones';
+            input.value = JSON.stringify(filasVisibles);
+            
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
         }
 
         function mostrarExito(mensaje) {

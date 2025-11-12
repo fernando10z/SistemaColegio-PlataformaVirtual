@@ -454,26 +454,8 @@ $refran = $refran;
         <div class="body-wrapper" style="top: 20px;">
             <div class="container-fluid">
                 
-                <!-- Header -->
-                <header class="app-header">
-                    <nav class="navbar navbar-expand-lg navbar-light">
-                        <ul class="navbar-nav">
-                            <li class="nav-item d-block d-xl-none">
-                                <a class="nav-link sidebartoggler" id="headerCollapse" href="javascript:void(0)">
-                                    <i class="ti ti-menu-2"></i>
-                                </a>
-                            </li>
-                        </ul>
-                        <div class="navbar-collapse justify-content-end px-0" id="navbarNav">
-                            <ul class="navbar-nav flex-row ms-auto align-items-center justify-content-end">
-                                <li class="nav-item">
-                                    <span class="badge bg-primary fs-2 rounded-4 lh-sm">Sistema AAC</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </nav>
-                </header>
-
+               <?php include 'includes/header.php'; ?>
+               
                 <!-- Page Title -->
                 <div class="row">
                     <div class="col-12">
@@ -990,7 +972,88 @@ $refran = $refran;
         }
 
         function exportarMalla() {
-            window.open('reportes/exportar_malla.php', '_blank');
+            // Capturar solo las filas visibles (filtradas)
+            const filasVisibles = [];
+            
+            $('#tablaMalla tbody tr:visible').each(function() {
+                const fila = $(this);
+                
+                // Código de nivel
+                const codigo_nivel = fila.find('.nivel-badge').text().trim();
+                
+                // Nivel y grado completo
+                const nivel = fila.find('.grado-nombre').text().trim();
+                const grado = fila.find('td:eq(0) small').text().trim();
+                const nivel_grado = nivel + (grado ? ' - ' + grado : '');
+                
+                // Área curricular
+                const area = fila.find('.area-nombre').text().trim();
+                const codigo_area = fila.find('.area-codigo').text().replace('Código:', '').trim();
+                
+                // Horas semanales
+                const horas = fila.find('.horas-badge').text().trim();
+                
+                // Competencias
+                let competencias = '';
+                fila.find('.competencias-preview .small').each(function() {
+                    const texto = $(this).text().trim();
+                    if (texto && !texto.startsWith('+')) {
+                        competencias += texto.replace('• ', '') + '|||';
+                    }
+                });
+                if (!competencias) {
+                    competencias = 'No definidas';
+                }
+                
+                // Período académico
+                const periodo = fila.find('td:eq(4) small').text().trim().replace(/\s+/g, ' ');
+                
+                // Validación
+                const validacion = fila.find('.validacion-horas').text().trim().toUpperCase();
+                
+                // Total de horas del grado
+                const total_horas = fila.find('td:eq(5) small').text().replace('Total:', '').trim();
+                
+                // Construir array con datos de la fila
+                filasVisibles.push([
+                    nivel_grado,      // 0
+                    area,             // 1
+                    horas,            // 2
+                    competencias,     // 3
+                    periodo,          // 4
+                    validacion,       // 5
+                    total_horas,      // 6
+                    codigo_nivel,     // 7
+                    codigo_area       // 8
+                ]);
+            });
+            
+            // Verificar si hay datos para exportar
+            if (filasVisibles.length === 0) {
+                Swal.fire({
+                    title: 'Sin datos',
+                    text: 'No hay asignaciones de malla curricular visibles para exportar. Ajusta los filtros.',
+                    icon: 'warning',
+                    confirmButtonColor: '#fd7e14'
+                });
+                return;
+            }
+            
+            // Crear formulario y enviar datos
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = 'reportes/exportar_malla.php';
+            form.target = '_blank';
+            
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'datosMalla';
+            input.value = JSON.stringify(filasVisibles);
+            
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
         }
 
         function mostrarExito(mensaje) {

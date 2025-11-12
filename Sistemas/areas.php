@@ -473,25 +473,7 @@ $refran = $refran;
             <div class="container-fluid">
                 
                 <!-- Header -->
-                <header class="app-header">
-                    <nav class="navbar navbar-expand-lg navbar-light">
-                        <ul class="navbar-nav">
-                            <li class="nav-item d-block d-xl-none">
-                                <a class="nav-link sidebartoggler" id="headerCollapse" href="javascript:void(0)">
-                                    <i class="ti ti-menu-2"></i>
-                                </a>
-                            </li>
-                        </ul>
-                        <div class="navbar-collapse justify-content-end px-0" id="navbarNav">
-                            <ul class="navbar-nav flex-row ms-auto align-items-center justify-content-end">
-                                <li class="nav-item">
-                                    <span class="badge bg-primary fs-2 rounded-4 lh-sm">Sistema AAC</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </nav>
-                </header>
-
+                <?php include 'includes/header.php'; ?>
                 <!-- Page Title -->
                 <div class="row">
                     <div class="col-12">
@@ -999,7 +981,100 @@ $refran = $refran;
         }
 
         function exportarAreas() {
-            window.open('reportes/exportar_areas.php', '_blank');
+            // Capturar solo las filas visibles (filtradas)
+            const filasVisibles = [];
+            
+            $('#tablaAreas tbody tr:visible').each(function() {
+                const fila = $(this);
+                
+                // Código del área
+                const codigo = fila.find('.codigo-area').text().trim();
+                
+                // Nombre del área
+                const nombre_area = fila.find('.area-nombre').text().trim();
+                
+                // Descripción
+                const descripcion = fila.find('.area-codigo').text().trim();
+                
+                // Datos completos del área (código + nombre)
+                const area_completa = codigo + ' ' + nombre_area;
+                
+                // Niveles atendidos
+                let niveles = '';
+                fila.find('.nivel-badge').each(function() {
+                    niveles += $(this).text().trim() + '|||';
+                });
+                if (niveles === '') {
+                    niveles = 'Sin asignaciones';
+                }
+                
+                // Competencias
+                const competencias_badge = fila.find('td:eq(2) .badge.bg-success').text().trim();
+                const competencias = competencias_badge || 'Sin competencias definidas';
+                
+                // Capturar detalle de competencias si están visibles
+                let competencias_detalle = '';
+                const detalleDiv = fila.find('[id^="competencias-detalle-"]');
+                if (detalleDiv.length > 0 && detalleDiv.is(':visible')) {
+                    detalleDiv.find('.competencia-texto').each(function() {
+                        competencias_detalle += $(this).text().trim() + '|||';
+                    });
+                }
+                
+                // Docentes y asignaciones
+                const docentes_num = fila.find('td:eq(3) .badge.bg-primary').text().trim();
+                const asignaciones = fila.find('td:eq(3) small').text().trim();
+                let docentes_texto = '';
+                if (docentes_num) {
+                    docentes_texto = docentes_num + ' docente' + (docentes_num !== '1' ? 's' : '');
+                    if (asignaciones) {
+                        docentes_texto += ' - ' + asignaciones;
+                    }
+                } else {
+                    docentes_texto = 'Sin docentes';
+                }
+                
+                // Estado
+                const estado = fila.find('td:eq(4) .badge').text().trim().toUpperCase();
+                
+                // Construir array con datos de la fila
+                filasVisibles.push([
+                    area_completa,      // 0
+                    niveles,            // 1
+                    competencias,       // 2
+                    docentes_texto,     // 3
+                    estado,             // 4
+                    descripcion,        // 5
+                    competencias_detalle // 6
+                ]);
+            });
+            
+            // Verificar si hay datos para exportar
+            if (filasVisibles.length === 0) {
+                Swal.fire({
+                    title: 'Sin datos',
+                    text: 'No hay áreas curriculares visibles para exportar. Ajusta los filtros.',
+                    icon: 'warning',
+                    confirmButtonColor: '#fd7e14'
+                });
+                return;
+            }
+            
+            // Crear formulario y enviar datos
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = 'reportes/exportar_areas.php';
+            form.target = '_blank';
+            
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'datosAreas';
+            input.value = JSON.stringify(filasVisibles);
+            
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
         }
 
         function mostrarExito(mensaje) {
