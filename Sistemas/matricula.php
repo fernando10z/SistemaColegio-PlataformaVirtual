@@ -1,5 +1,35 @@
-<?php 
+<?php
+session_start();
+
+// Redirigir al index si no hay sesión iniciada
+if (session_status() !== PHP_SESSION_ACTIVE
+  || (!isset($_SESSION['usuario_id']) && !isset($_SESSION['usuario_id']) && empty($_SESSION['login_time']))) {
+  header('Location: ../index.php');
+  exit;
+} 
     require_once 'conexion/bd.php';
+
+                        try {
+    $stmt_cp = $conexion->prepare("SELECT nombre, ruc, foto, direccion, refran FROM colegio_principal WHERE id = 1 LIMIT 1");
+    $stmt_cp->execute();
+    $colegio = $stmt_cp->fetch(PDO::FETCH_ASSOC);
+    if ($colegio) {
+        $colegio_nombre = isset($colegio['nombre']) ? $colegio['nombre'] : '';
+        $colegio_ruc    = isset($colegio['ruc']) ? $colegio['ruc'] : '';
+        $colegio_foto   = isset($colegio['foto']) ? $colegio['foto'] : '';
+        $colegio_direccion = isset($colegio['direccion']) ? $colegio['direccion'] : '';
+        $refran = isset($colegio['refran']) ? $colegio['refran'] : '';
+    }
+} catch (PDOException $e) {
+    error_log("Error fetching colegio_principal: " . $e->getMessage());
+}
+
+// Variables solicitadas (nombre, ruc, foto)
+$nombre = $colegio_nombre;
+$ruc    = $colegio_ruc;
+$foto   = $colegio_foto;
+$direccion = $colegio_direccion;
+$refran = $refran;
 
     // Obtener período académico actual
     try {
@@ -88,8 +118,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Gestión de Matrículas - ANDRÉS AVELINO CÁCERES</title>
-    <link rel="shortcut icon" type="image/png" href="../assets/images/logos/favicon.png" />
+    <title>Gestión de Matrículas - <?php echo $nombre; ?></title>
+    <?php
+        $favicon = !empty($foto) ? htmlspecialchars($foto) : 'assets/favicons/favicon-32x32.png';
+    ?>
+    <link rel="shortcut icon" type="image/png" sizes="32x32" href="../<?php echo $favicon; ?>">
     <link rel="stylesheet" href="../assets/css/styles.min.css" />
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" />
     <style>
@@ -435,24 +468,7 @@
             <div class="container-fluid">
                 
                 <!-- Header -->
-                <header class="app-header">
-                    <nav class="navbar navbar-expand-lg navbar-light">
-                        <ul class="navbar-nav">
-                            <li class="nav-item d-block d-xl-none">
-                                <a class="nav-link sidebartoggler" id="headerCollapse" href="javascript:void(0)">
-                                    <i class="ti ti-menu-2"></i>
-                                </a>
-                            </li>
-                        </ul>
-                        <div class="navbar-collapse justify-content-end px-0" id="navbarNav">
-                            <ul class="navbar-nav flex-row ms-auto align-items-center justify-content-end">
-                                <li class="nav-item">
-                                    <span class="badge bg-primary fs-2 rounded-4 lh-sm">Sistema AAC</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </nav>
-                </header>
+                <?php include 'includes/header.php'; ?>
 
                 <!-- Page Title -->
                 <div class="row">
@@ -1061,7 +1077,91 @@
         }
 
         function exportarMatricula() {
-            window.open('reportes/exportar_matricula.php', '_blank');
+            // Capturar solo las filas visibles (filtradas)
+            const filasVisibles = [];
+            
+            $('#tablaMatriculas tbody tr:visible').each(function() {
+                const fila = $(this);
+                
+                // Código de matrícula y período
+                const codigo_matricula = fila.find('.matricula-codigo').text().trim();
+                const periodo = fila.find('td:eq(0) small').text().trim();
+                const codigo_periodo = codigo_matricula + '\n' + periodo;
+                
+                // Estudiante (nombre + código + documento)
+                const nombre_estudiante = fila.find('.estudiante-nombre').text().trim();
+                const codigo_estudiante = fila.find('.estudiante-codigo').text().trim();
+                const documento = fila.find('td:eq(1) small').last().text().trim();
+                const estudiante = nombre_estudiante + '\n' + codigo_estudiante + '\n' + documento;
+                
+                // Sección (nombre + aula + capacidad)
+                const nombre_seccion = fila.find('.seccion-nombre').text().trim();
+                const seccion_detalles = fila.find('.seccion-detalles').contents();
+                let aula = '';
+                let capacidad_detalle = '';
+                seccion_detalles.each(function() {
+                    const texto = $(this).text().trim();
+                    if (texto && texto !== nombre_seccion) {
+                        if (!aula) aula = texto;
+                        else if (texto.includes('/')) capacidad_detalle = texto;
+                    }
+                });
+                const seccion = nombre_seccion + '\n' + aula + '\n' + capacidad_detalle;
+                
+                // Estado y tipo
+                const estado = fila.find('.estado-badge').text().trim();
+                const tipo = fila.find('.tipo-badge').text().trim();
+                const estado_tipo = estado + '\n' + tipo;
+                
+                // Capacidad con porcentaje
+                const capacidad_texto = fila.find('.capacidad-info').text().trim();
+                const porcentaje = fila.find('td:eq(4) small').text().trim();
+                const capacidad = capacidad_texto + ' - ' + porcentaje;
+                
+                // Fecha
+                const fecha = fila.find('td:eq(5) small').text().trim();
+                
+                // Observaciones
+                const observaciones = fila.find('td:eq(6) small').text().trim();
+                
+                // Construir array con datos de la fila
+                filasVisibles.push([
+                    codigo_periodo,   // 0
+                    estudiante,       // 1
+                    seccion,          // 2
+                    estado_tipo,      // 3
+                    capacidad,        // 4
+                    fecha,            // 5
+                    observaciones     // 6
+                ]);
+            });
+            
+            // Verificar si hay datos para exportar
+            if (filasVisibles.length === 0) {
+                Swal.fire({
+                    title: 'Sin datos',
+                    text: 'No hay matrículas visibles para exportar. Ajusta los filtros.',
+                    icon: 'warning',
+                    confirmButtonColor: '#fd7e14'
+                });
+                return;
+            }
+            
+            // Crear formulario y enviar datos
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = 'reportes/exportar_matricula.php';
+            form.target = '_blank';
+            
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'datosMatriculas';
+            input.value = JSON.stringify(filasVisibles);
+            
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
         }
 
         function mostrarExito(mensaje) {

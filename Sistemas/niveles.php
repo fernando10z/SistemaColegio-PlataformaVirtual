@@ -1,5 +1,35 @@
-<?php 
+<?php
+session_start();
+
+// Redirigir al index si no hay sesión iniciada
+if (session_status() !== PHP_SESSION_ACTIVE
+  || (!isset($_SESSION['usuario_id']) && !isset($_SESSION['usuario_id']) && empty($_SESSION['login_time']))) {
+  header('Location: ../index.php');
+  exit;
+} 
     require_once 'conexion/bd.php';
+
+                            try {
+    $stmt_cp = $conexion->prepare("SELECT nombre, ruc, foto, direccion, refran FROM colegio_principal WHERE id = 1 LIMIT 1");
+    $stmt_cp->execute();
+    $colegio = $stmt_cp->fetch(PDO::FETCH_ASSOC);
+    if ($colegio) {
+        $colegio_nombre = isset($colegio['nombre']) ? $colegio['nombre'] : '';
+        $colegio_ruc    = isset($colegio['ruc']) ? $colegio['ruc'] : '';
+        $colegio_foto   = isset($colegio['foto']) ? $colegio['foto'] : '';
+        $colegio_direccion = isset($colegio['direccion']) ? $colegio['direccion'] : '';
+        $refran = isset($colegio['refran']) ? $colegio['refran'] : '';
+    }
+} catch (PDOException $e) {
+    error_log("Error fetching colegio_principal: " . $e->getMessage());
+}
+
+// Variables solicitadas (nombre, ruc, foto)
+$nombre = $colegio_nombre;
+$ruc    = $colegio_ruc;
+$foto   = $colegio_foto;
+$direccion = $colegio_direccion;
+$refran = $refran;
 
     // Obtener niveles educativos con estadísticas de uso
     try {
@@ -74,8 +104,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Niveles y Grados Educativos - ANDRÉS AVELINO CÁCERES</title>
-    <link rel="shortcut icon" type="image/png" href="../assets/images/logos/favicon.png" />
+    <title>Niveles y Grados Educativos - <?php echo $nombre; ?></title>
+    <?php
+        $favicon = !empty($foto) ? htmlspecialchars($foto) : 'assets/favicons/favicon-32x32.png';
+    ?>
+    <link rel="shortcut icon" type="image/png" sizes="32x32" href="../<?php echo $favicon; ?>">
     <link rel="stylesheet" href="../assets/css/styles.min.css" />
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" />
     <style>
@@ -424,25 +457,7 @@
             <div class="container-fluid">
                 
                 <!-- Header -->
-                <header class="app-header">
-                    <nav class="navbar navbar-expand-lg navbar-light">
-                        <ul class="navbar-nav">
-                            <li class="nav-item d-block d-xl-none">
-                                <a class="nav-link sidebartoggler" id="headerCollapse" href="javascript:void(0)">
-                                    <i class="ti ti-menu-2"></i>
-                                </a>
-                            </li>
-                        </ul>
-                        <div class="navbar-collapse justify-content-end px-0" id="navbarNav">
-                            <ul class="navbar-nav flex-row ms-auto align-items-center justify-content-end">
-                                <li class="nav-item">
-                                    <span class="badge bg-primary fs-2 rounded-4 lh-sm">Sistema AAC</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </nav>
-                </header>
-
+                <?php include 'includes/header.php'; ?>
                 <!-- Page Title -->
                 <div class="row">
                     <div class="col-12">
@@ -452,10 +467,10 @@
                                 <p class="mb-0 text-muted">Configuración de estructura académica institucional</p>
                             </div>
                             <div class="d-flex gap-2">
-                                <button type="button" class="btn btn-outline-info" onclick="reorganizarNiveles()">
+                                <!-- <button type="button" class="btn btn-outline-info" onclick="reorganizarNiveles()">
                                     <i class="ti ti-arrows-sort me-2"></i>
                                     Reorganizar
-                                </button>
+                                </button> -->
                                 <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAgregarNivel">
                                     <i class="ti ti-plus me-2"></i>
                                     Nuevo Nivel
@@ -1026,7 +1041,77 @@
         }
 
         function exportarNiveles() {
-            window.open('reportes/exportar_niveles.php', '_blank');
+            // Capturar solo las filas visibles (filtradas)
+            const filasVisibles = [];
+            
+            $('#tablaNiveles tbody tr:visible').each(function() {
+                const fila = $(this);
+                
+                // Obtener todos los datos de la fila
+                const orden = fila.find('.orden-badge').text().trim();
+                const nivel_nombre = fila.find('.nivel-nombre').text().trim();
+                const nivel_codigo = fila.find('.nivel-codigo').text().replace('Código:', '').trim();
+                
+                // Contar grados
+                const num_grados = fila.find('.grado-badge').length;
+                const grados_texto = num_grados + ' grado' + (num_grados !== 1 ? 's' : '');
+                
+                // Capturar grados detallados
+                let grados_detalle = '';
+                fila.find('.grado-badge').each(function() {
+                    grados_detalle += $(this).text().trim() + '|||';
+                });
+                
+                // Rango de edades
+                const edades = fila.find('.edad-range').text().trim() || 'No definido';
+                
+                // Secciones y estudiantes
+                const secciones = fila.find('td:eq(4) .badge').text().trim();
+                const estudiantes = fila.find('.estudiantes-count').text().trim();
+                
+                // Estado
+                const estado = fila.find('td:eq(6) .badge').text().trim().toUpperCase();
+                
+                // Construir array con datos de la fila
+                filasVisibles.push([
+                    orden,              // 0
+                    nivel_nombre,       // 1
+                    grados_texto,       // 2
+                    edades,            // 3
+                    secciones,         // 4
+                    estudiantes,       // 5
+                    estado,            // 6
+                    nivel_codigo,      // 7
+                    grados_detalle     // 8
+                ]);
+            });
+            
+            // Verificar si hay datos para exportar
+            if (filasVisibles.length === 0) {
+                Swal.fire({
+                    title: 'Sin datos',
+                    text: 'No hay niveles educativos visibles para exportar. Ajusta los filtros.',
+                    icon: 'warning',
+                    confirmButtonColor: '#fd7e14'
+                });
+                return;
+            }
+            
+            // Crear formulario y enviar datos
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = 'reportes/exportar_niveles.php';
+            form.target = '_blank';
+            
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'datosNiveles';
+            input.value = JSON.stringify(filasVisibles);
+            
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
         }
 
         function mostrarExito(mensaje) {
@@ -1048,6 +1133,50 @@
                 confirmButtonColor: '#dc3545'
             });
         }
+
+        function ejecutarValidaciones() {
+    mostrarCarga();
+    
+    fetch('modales/niveles/procesar_niveles.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'accion=validar_edades'
+    })
+    .then(response => response.json())
+    .then(data => {
+        ocultarCarga();
+        
+        if (data.success) {
+            mostrarValidaciones(data.validaciones);
+            
+            // Si hay errores críticos, mostrar alerta adicional
+            if (data.validaciones.errores && data.validaciones.errores.length > 0) {
+                Swal.fire({
+                    title: 'Validación Completada',
+                    text: `Se encontraron ${data.validaciones.errores.length} error(es) que requieren atención.`,
+                    icon: 'warning',
+                    confirmButtonColor: '#fd7e14'
+                });
+            } else if (data.validaciones.ok) {
+                Swal.fire({
+                    title: '¡Validación Exitosa!',
+                    text: 'Todas las validaciones pasaron correctamente.',
+                    icon: 'success',
+                    confirmButtonColor: '#198754',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            }
+        } else {
+            mostrarError(data.message || 'Error al ejecutar validaciones');
+        }
+    })
+    .catch(error => {
+        ocultarCarga();
+        console.error('Error:', error);
+        mostrarError('Error de conexión al ejecutar validaciones');
+    });
+}
     </script>
 </body>
 </html>

@@ -1,5 +1,35 @@
-<?php 
+<?php
+session_start();
+
+// Redirigir al index si no hay sesión iniciada
+if (session_status() !== PHP_SESSION_ACTIVE
+  || (!isset($_SESSION['usuario_id']) && !isset($_SESSION['usuario_id']) && empty($_SESSION['login_time']))) {
+  header('Location: ../index.php');
+  exit;
+} 
 require_once 'conexion/bd.php';
+
+                                        try {
+    $stmt_cp = $conexion->prepare("SELECT nombre, ruc, foto, direccion, refran FROM colegio_principal WHERE id = 1 LIMIT 1");
+    $stmt_cp->execute();
+    $colegio = $stmt_cp->fetch(PDO::FETCH_ASSOC);
+    if ($colegio) {
+        $colegio_nombre = isset($colegio['nombre']) ? $colegio['nombre'] : '';
+        $colegio_ruc    = isset($colegio['ruc']) ? $colegio['ruc'] : '';
+        $colegio_foto   = isset($colegio['foto']) ? $colegio['foto'] : '';
+        $colegio_direccion = isset($colegio['direccion']) ? $colegio['direccion'] : '';
+        $refran = isset($colegio['refran']) ? $colegio['refran'] : '';
+    }
+} catch (PDOException $e) {
+    error_log("Error fetching colegio_principal: " . $e->getMessage());
+}
+
+// Variables solicitadas (nombre, ruc, foto)
+$nombre = $colegio_nombre;
+$ruc    = $colegio_ruc;
+$foto   = $colegio_foto;
+$direccion = $colegio_direccion;
+$refran = $refran;
 
 // Obtener período académico actual
 try {
@@ -48,16 +78,14 @@ try {
                    e.fecha_nacimiento, e.genero,
                    s.grado, s.seccion, s.aula_asignada,
                    ne.nombre as nivel_nombre,
-                   ea.nombres as apoderado_nombre, ea.apellidos as apoderado_apellido,
-                   ea.telefono as apoderado_telefono
+                   CONCAT(a.nombres, ' ', a.apellidos) as apoderado_nombre,
+                   JSON_UNQUOTE(JSON_EXTRACT(a.datos_personales, '$.telefono')) as apoderado_telefono
             FROM matriculas m
             INNER JOIN estudiantes e ON m.estudiante_id = e.id
             INNER JOIN secciones s ON m.seccion_id = s.id
             INNER JOIN niveles_educativos ne ON s.nivel_id = ne.id
-            LEFT JOIN estudiante_apoderados eap ON e.id = eap.estudiante_id AND eap.es_principal = 1
-            LEFT JOIN apoderados a ON eap.apoderado_id = a.id
-            LEFT JOIN usuarios ua ON a.usuario_id = ua.id
-            LEFT JOIN estudiantes ea ON a.id = ea.id
+            LEFT JOIN estudiante_apoderados ea ON e.id = ea.estudiante_id AND ea.es_principal = 1
+            LEFT JOIN apoderados a ON ea.apoderado_id = a.id
             WHERE m.estado = 'MATRICULADO' AND m.activo = 1 
                   AND m.periodo_academico_id = ?
             ORDER BY e.apellidos ASC, e.nombres ASC";
@@ -67,8 +95,8 @@ try {
     $estudiantes = $stmt_estudiantes->fetchAll(PDO::FETCH_ASSOC);
 } catch (PDOException $e) {
     $estudiantes = [];
+    error_log("Error al cargar estudiantes: " . $e->getMessage());
 }
-
 // Agrupar estudiantes por sección
 $estudiantes_por_seccion = [];
 foreach ($estudiantes as $estudiante) {
@@ -131,8 +159,11 @@ try {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Gestión de Traslados - ANDRÉS AVELINO CÁCERES</title>
-    <link rel="shortcut icon" type="image/png" href="../assets/images/logos/favicon.png" />
+    <title>Gestión de Traslados - <?php echo $nombre; ?></title>
+    <?php
+        $favicon = !empty($foto) ? htmlspecialchars($foto) : 'assets/favicons/favicon-32x32.png';
+    ?>
+    <link rel="shortcut icon" type="image/png" sizes="32x32" href="../<?php echo $favicon; ?>">
     <link rel="stylesheet" href="../assets/css/styles.min.css" />
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/dragula/3.7.3/dragula.min.css" />
@@ -519,24 +550,7 @@ try {
             <div class="container-fluid">
                 
                 <!-- Header -->
-                <header class="app-header">
-                    <nav class="navbar navbar-expand-lg navbar-light">
-                        <ul class="navbar-nav">
-                            <li class="nav-item d-block d-xl-none">
-                                <a class="nav-link sidebartoggler" id="headerCollapse" href="javascript:void(0)">
-                                    <i class="ti ti-menu-2"></i>
-                                </a>
-                            </li>
-                        </ul>
-                        <div class="navbar-collapse justify-content-end px-0" id="navbarNav">
-                            <ul class="navbar-nav flex-row ms-auto align-items-center justify-content-end">
-                                <li class="nav-item">
-                                    <span class="badge bg-primary fs-2 rounded-4 lh-sm">Sistema AAC</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </nav>
-                </header>
+                <?php include 'includes/header.php'; ?>
 
                 <!-- Page Title -->
                 <div class="row">
@@ -754,7 +768,7 @@ try {
                                                 <button type="button" class="btn btn-sm btn-outline-primary" 
                                                         onclick="trasladarEstudiante(<?= $estudiante['id'] ?>, <?= $estudiante['estudiante_id'] ?>)"
                                                         title="Trasladar">
-                                                    <i class="ti ti-transfer"></i>
+                                                    <i class="ti ti-arrows-right-left"></i>
                                                 </button>
                                             </td>
                                         </tr>
@@ -765,42 +779,79 @@ try {
                     </div>
                 </div>
 
-                <!-- Panel de Traslados Recientes -->
-                <div class="row mt-4">
-                    <div class="col-md-12">
-                        <div class="card">
-                            <div class="card-header">
-                                <h6 class="mb-0">Traslados Recientes (últimos 30 días)</h6>
-                            </div>
-                            <div class="card-body">
-                                <?php if (empty($traslados_recientes)): ?>
-                                    <p class="text-muted">No hay traslados recientes</p>
-                                <?php else: ?>
-                                    <?php foreach ($traslados_recientes as $traslado): ?>
-                                        <div class="traslado-item">
-                                            <div class="d-flex justify-content-between align-items-center">
-                                                <div>
-                                                    <strong><?= htmlspecialchars($traslado['apellidos'] . ', ' . $traslado['nombres']) ?></strong>
-                                                    <span class="badge bg-secondary mx-2"><?= htmlspecialchars($traslado['codigo_estudiante']) ?></span>
-                                                </div>
-                                                <div class="text-end">
-                                                    <div class="small text-muted">
-                                                        <?= date('d/m/Y H:i', strtotime($traslado['fecha_actualizacion'])) ?>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div class="mt-2">
-                                                <span class="badge bg-danger me-2"><?= htmlspecialchars($traslado['grado_origen'] . '-' . $traslado['seccion_origen']) ?></span>
-                                                <i class="ti ti-arrow-right mx-2"></i>
-                                                <span class="badge bg-success"><?= htmlspecialchars($traslado['grado_destino'] . '-' . $traslado['seccion_destino']) ?></span>
-                                            </div>
+                    <!-- Panel de Traslados Recientes -->
+                    <div class="row mt-4">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-header bg-light">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <h6 class="mb-0">
+                                            <i class="ti ti-history me-2"></i>
+                                            Traslados Recientes (últimos 30 días)
+                                        </h6>
+                                        <span class="badge bg-primary"><?= count($traslados_recientes) ?> registros</span>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <?php if (empty($traslados_recientes)): ?>
+                                        <div class="text-center text-muted py-4">
+                                            <i class="ti ti-transfer-out mb-2" style="font-size: 3rem; opacity: 0.3;"></i>
+                                            <p class="mb-0">No hay traslados registrados en los últimos 30 días</p>
                                         </div>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
+                                    <?php else: ?>
+                                        <div class="table-responsive">
+                                            <table class="table table-hover align-middle">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>Estudiante</th>
+                                                        <th>Sección Origen</th>
+                                                        <th></th>
+                                                        <th>Sección Destino</th>
+                                                        <th>Fecha</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <?php foreach ($traslados_recientes as $traslado): ?>
+                                                        <tr>
+                                                            <td>
+                                                                <div>
+                                                                    <strong><?= htmlspecialchars($traslado['apellidos'] . ', ' . $traslado['nombres']) ?></strong>
+                                                                    <br>
+                                                                    <small class="text-muted">
+                                                                        <i class="ti ti-id-badge"></i>
+                                                                        <?= htmlspecialchars($traslado['codigo_estudiante']) ?>
+                                                                    </small>
+                                                                </div>
+                                                            </td>
+                                                            <td>
+                                                                <span class="badge bg-danger fs-6">
+                                                                    <?= htmlspecialchars($traslado['grado_origen'] . '-' . $traslado['seccion_origen']) ?>
+                                                                </span>
+                                                            </td>
+                                                            <td class="text-center">
+                                                                <i class="ti ti-arrow-right text-primary fs-4"></i>
+                                                            </td>
+                                                            <td>
+                                                                <span class="badge bg-success fs-6">
+                                                                    <?= htmlspecialchars($traslado['grado_destino'] . '-' . $traslado['seccion_destino']) ?>
+                                                                </span>
+                                                            </td>
+                                                            <td>
+                                                                <small class="text-muted">
+                                                                    <i class="ti ti-calendar"></i>
+                                                                    <?= date('d/m/Y H:i', strtotime($traslado['fecha_traslado'])) ?>
+                                                                </small>
+                                                            </td>
+                                                        </tr>
+                                                    <?php endforeach; ?>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    <?php endif; ?>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
             </div>
         </div>
     </div>
@@ -994,24 +1045,35 @@ try {
             const capacidadFiltro = $('#filtroCapacidad').val();
             const busquedaEstudiante = $('#buscarEstudiante').val().toLowerCase();
 
-            // Filtrar secciones
+            // Filtrar secciones por nivel
             $('.nivel-section').each(function() {
                 const nivelSection = $(this);
                 let mostrarNivel = false;
+                
+                // Si hay filtro de nivel, verificar si coincide con el data-nivel
+                const nivelSeccionTexto = nivelSection.attr('data-nivel');
+                if (nivelFiltro) {
+                    // Buscar si alguna sección del nivel tiene el nivel_id correcto
+                    let nivelCoincide = false;
+                    nivelSection.find('.seccion-card').each(function() {
+                        // Comparar por el nombre del nivel en el título de la sección
+                        <?php foreach ($niveles as $niv): ?>
+                        if (nivelFiltro === '<?= $niv['id'] ?>' && nivelSeccionTexto === '<?= addslashes($niv['nombre']) ?>') {
+                            nivelCoincide = true;
+                            return false;
+                        }
+                        <?php endforeach; ?>
+                    });
+                    
+                    if (!nivelCoincide) {
+                        nivelSection.hide();
+                        return;
+                    }
+                }
 
                 nivelSection.find('.seccion-card').each(function() {
                     const seccionCard = $(this);
-                    const seccionId = seccionCard.data('seccion-id');
-                    
                     let mostrarSeccion = true;
-
-                    // Filtro por nivel (buscar en texto del nivel)
-                    if (nivelFiltro) {
-                        const nivelTexto = nivelSection.find('.nivel-title').text().toLowerCase();
-                        if (!nivelTexto.includes(nivelFiltro.toLowerCase())) {
-                            mostrarSeccion = false;
-                        }
-                    }
 
                     // Filtro por capacidad
                     if (capacidadFiltro && mostrarSeccion) {
@@ -1035,7 +1097,7 @@ try {
                             const infoEstudiante = $(this).find('.estudiante-info').text().toLowerCase();
                             if (nombreEstudiante.includes(busquedaEstudiante) || infoEstudiante.includes(busquedaEstudiante)) {
                                 tieneEstudianteBuscado = true;
-                                return false; // Break
+                                return false;
                             }
                         });
                         if (!tieneEstudianteBuscado) {
@@ -1052,11 +1114,7 @@ try {
 
             // Filtrar tabla
             if (tablaEstudiantes) {
-                let filtroTabla = '';
-                if (busquedaEstudiante) {
-                    filtroTabla = busquedaEstudiante;
-                }
-                tablaEstudiantes.search(filtroTabla).draw();
+                tablaEstudiantes.search(busquedaEstudiante || '').draw();
             }
         }
 
@@ -1088,7 +1146,166 @@ try {
         }
 
         function exportarTraslados() {
-            window.open('reportes/exportar_traslados.php', '_blank');
+            // Capturar traslados desde la tabla
+            const trasladosVisibles = [];
+            
+            // Buscar en la tabla de traslados recientes
+            $('#tablaEstudiantes tbody tr:visible').each(function() {
+                const fila = $(this);
+                
+                // Código del estudiante
+                const codigo = fila.find('td:eq(0) .badge').text().trim();
+                
+                // Nombre completo del estudiante
+                const nombreCompleto = fila.find('td:eq(1) .fw-bold').text().trim();
+                
+                // Información adicional (fecha nacimiento y género)
+                const infoAdicional = fila.find('td:eq(1) small').text().trim();
+                
+                // Documento
+                const documento = fila.find('td:eq(3) small').text().trim();
+                
+                const estudiante = nombreCompleto + '\n' + codigo + '\n' + documento;
+                
+                // Sección actual (origen)
+                const seccionActual = fila.find('td:eq(2) .fw-bold').text().trim();
+                
+                // Nivel
+                const nivel = fila.find('td:eq(2) small').text().trim();
+                
+                // Apoderado
+                const apoderado = fila.find('td:eq(4) small').text().trim();
+                
+                // Teléfono
+                const telefono = fila.find('td:eq(5) small').text().trim();
+                
+                // Construir datos del traslado
+                trasladosVisibles.push([
+                    estudiante,                    // 0: Estudiante completo
+                    nivel,                         // 1: Nivel educativo
+                    seccionActual,                 // 2: Sección origen
+                    'Por definir',                 // 3: Sección destino (pendiente)
+                    new Date().toISOString().split('T')[0], // 4: Fecha actual
+                    'Origen: ' + seccionActual + '\nDestino: Pendiente', // 5: Capacidades
+                    'Consulta de traslados - ' + apoderado + ' - Tel: ' + telefono // 6: Motivo/Observaciones
+                ]);
+            });
+            
+            // Si no hay datos en la tabla de estudiantes, intentar con la tabla de traslados recientes
+            if (trasladosVisibles.length === 0) {
+                $('table.table-hover tbody tr').each(function() {
+                    const fila = $(this);
+                    
+                    // Verificar si la fila tiene los badges de origen/destino
+                    const badges = fila.find('.badge');
+                    if (badges.length < 2) return; // Skip si no tiene la estructura correcta
+                    
+                    // Estudiante
+                    const nombreCompleto = fila.find('strong').first().text().trim();
+                    const codigoMatch = fila.find('small').first().text().match(/[A-Z0-9]+/);
+                    const codigo = codigoMatch ? codigoMatch[0] : '';
+                    const estudiante = nombreCompleto + '\n' + codigo + '\nDNI';
+                    
+                    // Secciones
+                    let seccion_origen = '';
+                    let seccion_destino = '';
+                    let nivel = 'No especificado';
+                    
+                    badges.each(function() {
+                        const badge = $(this);
+                        const texto = badge.text().trim();
+                        
+                        if (badge.hasClass('bg-danger')) {
+                            seccion_origen = texto;
+                            // Extraer nivel del grado (1ro, 2do, etc.)
+                            if (texto.includes('1ro')) nivel = 'Primaria';
+                            else if (texto.includes('2do')) nivel = 'Primaria';
+                            else if (texto.includes('3ro')) nivel = 'Primaria';
+                            else if (texto.includes('4to')) nivel = 'Primaria';
+                            else if (texto.includes('5to')) nivel = 'Primaria';
+                            else if (texto.includes('6to')) nivel = 'Primaria';
+                        } else if (badge.hasClass('bg-success')) {
+                            seccion_destino = texto;
+                        }
+                    });
+                    
+                    // Fecha
+                    const fechaElement = fila.find('small:contains("📅")');
+                    let fecha = new Date().toISOString().split('T')[0];
+                    if (fechaElement.length > 0) {
+                        const fechaTexto = fechaElement.text().trim();
+                        const match = fechaTexto.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+                        if (match) {
+                            fecha = `${match[3]}-${match[2]}-${match[1]} ${match[4]}:${match[5]}`;
+                        }
+                    }
+                    
+                    // Capacidades
+                    const capacidades = 'Origen: ' + seccion_origen + '\nDestino: ' + seccion_destino;
+                    
+                    // Motivo
+                    const motivo = 'Traslado registrado el ' + fecha;
+                    
+                    trasladosVisibles.push([
+                        estudiante,       // 0
+                        nivel,           // 1
+                        seccion_origen,  // 2
+                        seccion_destino, // 3
+                        fecha,           // 4
+                        capacidades,     // 5
+                        motivo           // 6
+                    ]);
+                });
+            }
+            
+            // Verificar si hay datos para exportar
+            if (trasladosVisibles.length === 0) {
+                Swal.fire({
+                    title: 'Sin datos',
+                    text: 'No hay traslados disponibles para exportar. Asegúrate de tener traslados registrados en el sistema.',
+                    icon: 'warning',
+                    confirmButtonColor: '#fd7e14'
+                });
+                return;
+            }
+            
+            // Mostrar confirmación
+            Swal.fire({
+                title: 'Exportar Traslados',
+                text: `Se exportarán ${trasladosVisibles.length} registro(s) de traslados.`,
+                icon: 'info',
+                showCancelButton: true,
+                confirmButtonColor: '#0d6efd',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, exportar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Crear formulario y enviar datos
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = 'reportes/exportar_traslados.php';
+                    form.target = '_blank';
+                    
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'datosTraslados';
+                    input.value = JSON.stringify(trasladosVisibles);
+                    
+                    form.appendChild(input);
+                    document.body.appendChild(form);
+                    form.submit();
+                    document.body.removeChild(form);
+                    
+                    Swal.fire({
+                        title: '¡Exportando!',
+                        text: 'Se está generando el reporte PDF...',
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                }
+            });
         }
 
         function mostrarExito(mensaje) {

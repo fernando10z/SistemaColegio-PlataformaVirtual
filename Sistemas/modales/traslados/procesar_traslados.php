@@ -1,6 +1,7 @@
 <?php
+session_start();
 require_once '../../conexion/bd.php';
-header('Content-Type: application/json');
+header('Content-Type: application/json; charset=utf-8');
 
 $response = ['success' => false, 'message' => ''];
 
@@ -45,9 +46,11 @@ try {
         'success' => false,
         'message' => $e->getMessage()
     ];
+    error_log("Error en procesar_traslados.php: " . $e->getMessage());
 }
 
-echo json_encode($response);
+echo json_encode($response, JSON_UNESCAPED_UNICODE);
+exit;
 
 function trasladarEstudiante() {
     global $conexion;
@@ -62,7 +65,7 @@ function trasladarEstudiante() {
     $conexion->beginTransaction();
 
     try {
-        // Verificar que la matrícula existe
+        // Verificar que la matrícula existe y está activa
         $stmt = $conexion->prepare("
             SELECT m.*, e.nombres, e.apellidos, e.codigo_estudiante,
                    s.grado as grado_origen, s.seccion as seccion_origen,
@@ -81,12 +84,14 @@ function trasladarEstudiante() {
 
         // Verificar capacidad de la sección destino
         $stmt = $conexion->prepare("
-            SELECT s.*, 
+            SELECT s.*, ne.nombre as nivel_nombre,
                    COUNT(m.id) as estudiantes_actuales
             FROM secciones s
+            INNER JOIN niveles_educativos ne ON s.nivel_id = ne.id
             LEFT JOIN matriculas m ON s.id = m.seccion_id 
                                     AND m.estado = 'MATRICULADO' 
                                     AND m.activo = 1
+                                    AND m.periodo_academico_id = s.periodo_academico_id
             WHERE s.id = ? AND s.activo = 1
             GROUP BY s.id
         ");
@@ -98,7 +103,7 @@ function trasladarEstudiante() {
         }
 
         if ($seccionDestino['estudiantes_actuales'] >= $seccionDestino['capacidad_maxima']) {
-            throw new Exception('La sección destino está completa');
+            throw new Exception('La sección destino está completa (' . $seccionDestino['estudiantes_actuales'] . '/' . $seccionDestino['capacidad_maxima'] . ')');
         }
 
         // Verificar que no sea la misma sección
@@ -109,13 +114,12 @@ function trasladarEstudiante() {
         // Actualizar la matrícula
         $stmt = $conexion->prepare("
             UPDATE matriculas 
-            SET seccion_id = ?, 
-                fecha_actualizacion = NOW() 
+            SET seccion_id = ?
             WHERE id = ?
         ");
         $stmt->execute([$seccionDestinoId, $matriculaId]);
 
-        // Registrar en auditoría si existe la tabla
+        // Registrar en auditoría
         try {
             $stmt = $conexion->prepare("
                 INSERT INTO auditoria_sistema (usuario_id, modulo, accion, tabla_afectada, registro_id, datos_cambio)
@@ -126,10 +130,12 @@ function trasladarEstudiante() {
                 'codigo_estudiante' => $matricula['codigo_estudiante'],
                 'seccion_origen' => $matricula['grado_origen'] . '-' . $matricula['seccion_origen'],
                 'seccion_destino' => $seccionDestino['grado'] . '-' . $seccionDestino['seccion']
-            ]);
-            $stmt->execute([1, $matriculaId, $datosAuditoria]); // Usuario 1 por defecto
+            ], JSON_UNESCAPED_UNICODE);
+            $usuarioId = $_SESSION['usuario_id'] ?? 1;
+            $stmt->execute([$usuarioId, $matriculaId, $datosAuditoria]);
         } catch (Exception $e) {
-            // Si falla la auditoría, continuar (no es crítico)
+            // Continuar si falla la auditoría
+            error_log("Error en auditoría: " . $e->getMessage());
         }
 
         $conexion->commit();
@@ -162,16 +168,17 @@ function ejecutarTrasladoManual() {
     $_POST['matricula_id'] = $matriculaId;
     $resultado = trasladarEstudiante();
     
+    // Guardar el motivo si existe
     if ($resultado['success'] && !empty($motivo)) {
-        // Guardar el motivo en algún lugar si es necesario
         try {
             $stmt = $conexion->prepare("
                 INSERT INTO auditoria_sistema (usuario_id, modulo, accion, tabla_afectada, registro_id, datos_cambio)
                 VALUES (?, 'TRASLADOS', 'MOTIVO_TRASLADO', 'matriculas', ?, ?)
             ");
-            $stmt->execute([1, $matriculaId, json_encode(['motivo' => $motivo])]);
+            $usuarioId = $_SESSION['usuario_id'] ?? 1;
+            $stmt->execute([$usuarioId, $matriculaId, json_encode(['motivo' => $motivo], JSON_UNESCAPED_UNICODE)]);
         } catch (Exception $e) {
-            // No es crítico si falla
+            error_log("Error guardando motivo: " . $e->getMessage());
         }
     }
     
@@ -181,55 +188,70 @@ function ejecutarTrasladoManual() {
 function obtenerSecciones() {
     global $conexion;
     
-    if (!isset($_POST['nivel_id'])) {
-        throw new Exception('Nivel no especificado');
+    if (!isset($_POST['nivel_id']) || !isset($_POST['periodo_academico_id'])) {
+        throw new Exception('Nivel o período académico no especificado');
     }
 
     $nivelId = (int)$_POST['nivel_id'];
+    $periodoId = (int)$_POST['periodo_academico_id'];
 
     $stmt = $conexion->prepare("
-        SELECT s.id, s.grado, s.seccion, s.capacidad_maxima,
+        SELECT s.id, s.grado, s.seccion, s.capacidad_maxima, s.aula_asignada,
                COUNT(m.id) as estudiantes_actuales
         FROM secciones s
         LEFT JOIN matriculas m ON s.id = m.seccion_id 
                                 AND m.estado = 'MATRICULADO' 
                                 AND m.activo = 1
-        WHERE s.nivel_id = ? AND s.activo = 1
+                                AND m.periodo_academico_id = ?
+        WHERE s.nivel_id = ? 
+          AND s.periodo_academico_id = ?
+          AND s.activo = 1
         GROUP BY s.id
         ORDER BY s.grado ASC, s.seccion ASC
     ");
-    $stmt->execute([$nivelId]);
+    $stmt->execute([$periodoId, $nivelId, $periodoId]);
     $secciones = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     return [
         'success' => true,
-        'secciones' => $secciones
+        'secciones' => $secciones,
+        'total' => count($secciones)
     ];
 }
 
 function obtenerEstudiantes() {
     global $conexion;
     
-    if (!isset($_POST['seccion_id'])) {
-        throw new Exception('Sección no especificada');
+    if (!isset($_POST['seccion_id']) || !isset($_POST['periodo_academico_id'])) {
+        throw new Exception('Sección o período académico no especificado');
     }
 
     $seccionId = (int)$_POST['seccion_id'];
+    $periodoId = (int)$_POST['periodo_academico_id'];
 
     $stmt = $conexion->prepare("
-        SELECT m.id as matricula_id, e.id as estudiante_id,
-               e.nombres, e.apellidos, e.codigo_estudiante
+        SELECT m.id as matricula_id, 
+               e.id as estudiante_id,
+               e.nombres, 
+               e.apellidos, 
+               e.codigo_estudiante,
+               e.documento_tipo,
+               e.documento_numero
         FROM matriculas m
         INNER JOIN estudiantes e ON m.estudiante_id = e.id
-        WHERE m.seccion_id = ? AND m.estado = 'MATRICULADO' AND m.activo = 1
+        WHERE m.seccion_id = ? 
+          AND m.periodo_academico_id = ?
+          AND m.estado = 'MATRICULADO' 
+          AND m.activo = 1
         ORDER BY e.apellidos ASC, e.nombres ASC
     ");
-    $stmt->execute([$seccionId]);
+    $stmt->execute([$seccionId, $periodoId]);
     $estudiantes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     return [
         'success' => true,
-        'estudiantes' => $estudiantes
+        'estudiantes' => $estudiantes,
+        'total' => count($estudiantes)
     ];
 }
 
@@ -243,8 +265,12 @@ function obtenerInfoEstudiante() {
     $matriculaId = (int)$_POST['matricula_id'];
 
     $stmt = $conexion->prepare("
-        SELECT e.*, m.fecha_matricula,
-               s.grado, s.seccion,
+        SELECT e.*, 
+               m.fecha_matricula,
+               m.codigo_matricula,
+               s.grado, 
+               s.seccion,
+               s.aula_asignada,
                ne.nombre as nivel_nombre
         FROM matriculas m
         INNER JOIN estudiantes e ON m.estudiante_id = e.id
@@ -277,14 +303,22 @@ function obtenerHistorial() {
 
     $sql = "
         SELECT 
-            DATE_FORMAT(m.fecha_actualizacion, '%d/%m/%Y %H:%i') as fecha_traslado,
-            e.nombres, e.apellidos, e.codigo_estudiante,
+            DATE_FORMAT(a.fecha_evento, '%d/%m/%Y %H:%i') as fecha_traslado,
+            e.nombres, 
+            e.apellidos, 
+            e.codigo_estudiante,
             CONCAT(e.apellidos, ', ', e.nombres) as estudiante_nombre,
+            JSON_EXTRACT(a.datos_cambio, '$.seccion_origen') as seccion_origen,
+            JSON_EXTRACT(a.datos_cambio, '$.seccion_destino') as seccion_destino,
             'Traslado de sección' as motivo,
-            'Sistema' as usuario_nombre
-        FROM matriculas m
+            COALESCE(u.nombres, 'Sistema') as usuario_nombre
+        FROM auditoria_sistema a
+        INNER JOIN matriculas m ON a.registro_id = m.id
         INNER JOIN estudiantes e ON m.estudiante_id = e.id
-        WHERE DATE(m.fecha_actualizacion) BETWEEN ? AND ?
+        LEFT JOIN usuarios u ON a.usuario_id = u.id
+        WHERE a.modulo = 'TRASLADOS' 
+          AND a.accion = 'TRASLADO_ESTUDIANTE'
+          AND DATE(a.fecha_evento) BETWEEN ? AND ?
     ";
 
     $params = [$fechaDesde, $fechaHasta];
@@ -297,21 +331,22 @@ function obtenerHistorial() {
         $params[] = $busquedaParam;
     }
 
-    $sql .= " ORDER BY m.fecha_actualizacion DESC LIMIT 100";
+    $sql .= " ORDER BY a.fecha_evento DESC LIMIT 100";
 
     $stmt = $conexion->prepare($sql);
     $stmt->execute($params);
     $historial = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    // Agregar información de secciones origen/destino (simulado por simplicidad)
+    // Limpiar JSON quotes
     foreach ($historial as &$traslado) {
-        $traslado['seccion_origen'] = 'Origen';
-        $traslado['seccion_destino'] = 'Destino';
+        $traslado['seccion_origen'] = trim($traslado['seccion_origen'] ?? '', '"');
+        $traslado['seccion_destino'] = trim($traslado['seccion_destino'] ?? '', '"');
     }
 
     return [
         'success' => true,
-        'historial' => $historial
+        'historial' => $historial,
+        'total' => count($historial)
     ];
 }
 ?>

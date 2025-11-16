@@ -3,6 +3,32 @@
 session_start();
 require_once 'Sistemas/conexion/bd.php';
 
+// Obtener datos del colegio (id = 1)
+$colegio_nombre = '';
+$colegio_ruc    = '';
+$colegio_foto   = '';
+
+try {
+    $stmt_cp = $conexion->prepare("SELECT nombre, ruc, foto, direccion, refran FROM colegio_principal WHERE id = 1 LIMIT 1");
+    $stmt_cp->execute();
+    $colegio = $stmt_cp->fetch(PDO::FETCH_ASSOC);
+    if ($colegio) {
+        $colegio_nombre = isset($colegio['nombre']) ? $colegio['nombre'] : '';
+        $colegio_ruc    = isset($colegio['ruc']) ? $colegio['ruc'] : '';
+        $colegio_foto   = isset($colegio['foto']) ? $colegio['foto'] : '';
+        $colegio_direccion = isset($colegio['direccion']) ? $colegio['direccion'] : '';
+        $refran = isset($colegio['refran']) ? $colegio['refran'] : '';
+    }
+} catch (PDOException $e) {
+    error_log("Error fetching colegio_principal: " . $e->getMessage());
+}
+
+// Variables solicitadas (nombre, ruc, foto)
+$nombre = $colegio_nombre;
+$ruc    = $colegio_ruc;
+$foto   = $colegio_foto;
+$direccion = $colegio_direccion;
+$refran = $refran;
 
 $error_message = "";
 $success_message = "";
@@ -102,247 +128,645 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Login - ANDRÉS AVELINO CÁCERES</title>
-    <link rel="shortcut icon" type="image/png" href="assets/images/logos/favicon.png" />
-    <link rel="stylesheet" href="assets/css/styles.min.css" />
+    <title>Acceso - <?php echo $nombre?></title>
+    <?php
+    $favicon = !empty($foto) ? htmlspecialchars($foto) : 'assets/favicons/favicon-32x32.png';
+    ?>
+    <link rel="short icon" type="image/png" sizes="32x32" href="<?php echo $favicon; ?>">
+    <meta name="theme-color" content="#1a5f7a">
     <style>
-        .alert {
-            padding: 15px;
-            margin-bottom: 20px;
-            border: 1px solid transparent;
-            border-radius: 4px;
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        .alert-danger {
-            color: #721c24;
-            background-color: #f8d7da;
-            border-color: #f5c6cb;
+
+        :root {
+            /* Colores institucionales del escudo */
+            --primary: #1a5f7a;
+            --primary-dark: #134556;
+            --primary-light: #2a7a96;
+            --accent: #c8102e;
+            --accent-hover: #a00d25;
+            --gold: #d4af37;
+            
+            /* Neutrales */
+            --surface: #ffffff;
+            --gray-50: #fafafa;
+            --gray-100: #f5f5f5;
+            --gray-200: #eeeeee;
+            --gray-300: #e0e0e0;
+            --gray-400: #bdbdbd;
+            --gray-500: #9e9e9e;
+            --gray-600: #757575;
+            --gray-700: #616161;
+            --gray-800: #424242;
+            --gray-900: #212121;
+            
+            /* Estados */
+            --error: #d32f2f;
+            --error-light: #ffebee;
+            --success: #388e3c;
+            --success-light: #e8f5e9;
         }
-        .alert-success {
-            color: #155724;
-            background-color: #d4edda;
-            border-color: #c3e6cb;
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            background: var(--gray-50);
+            color: var(--gray-900);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
         }
-        .password-toggle {
+
+        .container {
+            width: 100%;
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* Panel izquierdo - Institucional */
+        .left-panel {
+            flex: 1;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
             position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 60px 40px;
+            overflow: hidden;
         }
-        .password-toggle-icon {
+
+        /* Patrón sutil de fondo */
+        .left-panel::before {
+            content: '';
             position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            cursor: pointer;
-            color: #6c757d;
-        }
-        .loading {
-            opacity: 0.6;
+            inset: 0;
+            background-image: 
+                radial-gradient(circle at 20% 30%, rgba(255,255,255,0.08) 0%, transparent 50%),
+                radial-gradient(circle at 80% 70%, rgba(255,255,255,0.06) 0%, transparent 50%);
             pointer-events: none;
         }
-        .loading .btn {
+
+        .institutional-content {
+            position: relative;
+            z-index: 1;
+            text-align: center;
+            color: white;
+            max-width: 480px;
+            animation: fadeInUp 0.8s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Logo institucional */
+        .school-logo {
+            width: 140px;
+            height: 140px;
+            margin: 0 auto 32px;
+            background: white;
+            border-radius: 16px;
+            padding: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .school-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .school-name {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 12px;
+            letter-spacing: -0.3px;
+            line-height: 1.3;
+        }
+
+        .school-motto {
+            font-size: 16px;
+            opacity: 0.9;
+            font-weight: 400;
+            margin-bottom: 40px;
+            line-height: 1.5;
+        }
+
+        .institutional-info {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            padding: 24px;
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+            opacity: 0.95;
+        }
+
+        .info-icon {
+            width: 20px;
+            height: 20px;
+            opacity: 0.8;
+        }
+
+        /* Panel derecho - Formulario */
+        .right-panel {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            background: white;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 420px;
+        }
+
+        .login-header {
+            margin-bottom: 40px;
+        }
+
+        .login-header h2 {
+            font-size: 26px;
+            font-weight: 700;
+            color: var(--gray-900);
+            margin-bottom: 8px;
+            letter-spacing: -0.3px;
+        }
+
+        .login-header p {
+            color: var(--gray-600);
+            font-size: 15px;
+        }
+
+        /* Mensajes */
+        .alert {
+            padding: 14px 16px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            font-size: 14px;
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            animation: slideIn 0.3s ease-out;
+            line-height: 1.5;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .alert-error {
+            background: var(--error-light);
+            color: var(--error);
+            border: 1px solid #ffcdd2;
+        }
+
+        .alert-success {
+            background: var(--success-light);
+            color: var(--success);
+            border: 1px solid #c8e6c9;
+        }
+
+        .alert svg {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        /* Formulario */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--gray-800);
+            margin-bottom: 8px;
+        }
+
+        .input-wrapper {
             position: relative;
         }
-        .loading .btn::after {
-            content: "";
+
+        .form-input {
+            width: 100%;
+            padding: 12px 16px;
+            font-size: 15px;
+            border: 1.5px solid var(--gray-300);
+            background: var(--surface);
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            outline: none;
+            color: var(--gray-900);
+        }
+
+        .form-input::placeholder {
+            color: var(--gray-400);
+        }
+
+        .form-input:hover {
+            border-color: var(--gray-400);
+        }
+
+        .form-input:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(26, 95, 122, 0.1);
+        }
+
+        .password-toggle {
             position: absolute;
-            width: 16px;
-            height: 16px;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--gray-500);
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+            border-radius: 4px;
+        }
+
+        .password-toggle:hover {
+            color: var(--gray-700);
+            background: var(--gray-100);
+        }
+
+        .password-toggle svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        /* Opciones del formulario */
+        .form-options {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 32px;
+            font-size: 14px;
+        }
+
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .checkbox {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
+
+        .checkbox-label {
+            color: var(--gray-700);
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .link {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+
+        .link:hover {
+            color: var(--primary-dark);
+        }
+
+        /* Botón principal */
+        .btn-primary {
+            width: 100%;
+            padding: 13px 24px;
+            font-size: 15px;
+            font-weight: 600;
+            color: white;
+            background: var(--accent);
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(200, 16, 46, 0.3);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-primary.loading {
+            color: transparent;
+        }
+
+        .btn-primary.loading::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
             top: 50%;
             left: 50%;
-            transform: translate(-50%, -50%);
+            margin: -10px 0 0 -10px;
             border: 2px solid transparent;
-            border-top: 2px solid #ffffff;
+            border-top-color: white;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
+            animation: spin 0.8s linear infinite;
         }
+
         @keyframes spin {
-            0% { transform: translate(-50%, -50%) rotate(0deg); }
-            100% { transform: translate(-50%, -50%) rotate(360deg); }
+            to { transform: rotate(360deg); }
         }
-        .logo-container {
+
+        /* Footer */
+        .footer {
+            margin-top: 48px;
+            padding-top: 24px;
+            border-top: 1px solid var(--gray-200);
             text-align: center;
-            margin-bottom: 2rem;
+            font-size: 13px;
+            color: var(--gray-500);
         }
-        .logo-text {
-            font-size: 1.5rem;
-            font-weight: bold;
-            color: #2c3e50;
-            text-decoration: none;
+
+        .footer p {
+            margin-bottom: 4px;
         }
-        .logo-icon {
-            vertical-align: middle;
-            font-size: 2rem;
-            margin-right: 8px;
-            color: #3498db;
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .left-panel {
+                display: none;
+            }
+            
+            .right-panel {
+                background: var(--gray-50);
+            }
+            
+            .login-container {
+                background: white;
+                padding: 40px;
+                border-radius: 16px;
+                box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+            }
+
+            /* Mostrar logo en mobile */
+            .login-container::before {
+                content: '';
+                display: block;
+                width: 80px;
+                height: 80px;
+                margin: 0 auto 32px;
+                background: url('<?php echo htmlspecialchars($foto); ?>') center/contain no-repeat;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .right-panel {
+                padding: 20px;
+            }
+            
+            .login-container {
+                padding: 32px 24px;
+            }
+            
+            .form-options {
+                flex-direction: column;
+                gap: 12px;
+                align-items: flex-start;
+            }
+
+            .login-header h2 {
+                font-size: 24px;
+            }
         }
     </style>
 </head>
 
 <body>
-    <!--  Body Wrapper -->
-    <div class="page-wrapper" id="main-wrapper" data-layout="vertical" data-navbarbg="skin6" 
-         data-sidebartype="full" data-sidebar-position="fixed" data-header-position="fixed">
-        <div class="position-relative overflow-hidden text-bg-light min-vh-100 d-flex align-items-center justify-content-center">
-            <div class="d-flex align-items-center justify-content-center w-100">
-                <div class="row justify-content-center w-100">
-                    <div class="col-md-8 col-lg-6 col-xxl-4">
-                        <div class="card mb-0 shadow">
-                            <div class="card-body p-4">
-                                <div class="logo-container">
-                                    <a href="./login.php" class="logo-text">
-                                        <iconify-icon icon="mdi:school" class="logo-icon"></iconify-icon>
-                                        ANDRÉS AVELINO CÁCERES
-                                    </a>
-                                </div>
-                                
-                                <p class="text-center">Iniciar Sesion</p>
-                                
-                                <!-- Mostrar mensajes de error o éxito -->
-                                <?php if (!empty($error_message)): ?>
-                                    <div class="alert alert-danger" role="alert">
-                                        <iconify-icon icon="mdi:alert-circle"></iconify-icon>
-                                        <?php echo htmlspecialchars($error_message); ?>
-                                    </div>
-                                <?php endif; ?>
-                                
-                                <?php if (!empty($success_message)): ?>
-                                    <div class="alert alert-success" role="alert">
-                                        <iconify-icon icon="mdi:check-circle"></iconify-icon>
-                                        <?php echo htmlspecialchars($success_message); ?>
-                                    </div>
-                                <?php endif; ?>
-                                
-                                <form id="loginForm" method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>">
-                                    <div class="mb-3">
-                                        <label for="email" class="form-label">Correo Electrónico:</label>
-                                        <input type="email" 
-                                               class="form-control" 
-                                               id="email" 
-                                               name="email"
-                                               value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>"
-                                               required
-                                               autocomplete="email"
-                                               placeholder="ejemplo@aac.edu.pe">
-                                    </div>
-                                    
-                                    <div class="mb-4">
-                                        <label for="password" class="form-label">Contraseña:</label>
-                                        <div class="password-toggle">
-                                            <input type="password" 
-                                                   class="form-control" 
-                                                   id="password" 
-                                                   name="password"
-                                                   required
-                                                   autocomplete="current-password"
-                                                   placeholder="Ingrese su contraseña">
-                                            <iconify-icon icon="mdi:eye" class="password-toggle-icon" id="togglePassword"></iconify-icon>
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="d-flex align-items-center justify-content-between mb-4">
-                                        <div class="form-check">
-                                            <input class="form-check-input primary" 
-                                                   type="checkbox" 
-                                                   id="remember" 
-                                                   name="remember">
-                                            <label class="form-check-label text-dark" for="remember">
-                                                Recordar este dispositivo
-                                            </label>
-                                        </div>
-                                        <a class="text-primary fw-bold" href="forgot_password.php">¿Olvidaste tu contraseña?</a>
-                                    </div>
-                                    
-                                    <button type="submit" class="btn btn-primary w-100 py-3 fs-4 mb-4">
-                                        Iniciar Sesión
-                                    </button>
-                                    
-                                    <div class="d-flex align-items-center justify-content-center">
-                                        <p class="fs-5 mb-0 fw-bold">¿Nuevo usuario?</p>
-                                        <a class="text-primary fw-bold ms-2" href="registro.php">Solicitar una cuenta</a>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                        
-                        <!-- Información adicional -->
-                        <div class="text-center mt-4">
-                            <small class="text-muted">
-                                © <?php echo date('Y'); ?> Institución Educativa Andrés Avelino Cáceres. 
-                                <br>Todos los derechos reservados.
-                            </small>
+    <div class="container">
+        <!-- Panel izquierdo - Institucional -->
+        <div class="left-panel">
+            <div class="institutional-content">
+                <div class="school-logo">
+                    <img src="<?php echo htmlspecialchars($foto); ?>" alt="Escudo de <?php echo htmlspecialchars($nombre); ?>">
+                </div>
+                
+                <h1 class="school-name">
+                    <?php echo htmlspecialchars($nombre); ?>
+                </h1>
+                
+                <p class="school-motto">
+                    Sistema de Gestión Educativa Digital
+                </p>
+                
+                <div class="institutional-info">
+                    <div class="info-item">
+                        <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                            <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                        </svg>
+                        <span><?php echo htmlspecialchars($direccion); ?></span>
+                    </div>
+                    <div class="info-item">
+                        <svg class="info-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect>
+                            <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                        </svg>
+                        <span><?php echo htmlspecialchars($refran); ?></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Panel derecho - Formulario -->
+        <div class="right-panel">
+            <div class="login-container">
+                <div class="login-header">
+                    <h2>Iniciar sesión</h2>
+                    <p>Ingresa tus credenciales para acceder</p>
+                </div>
+
+                <!-- Mensajes de error/éxito -->
+                <?php if (!empty($error_message)): ?>
+                    <div class="alert alert-error">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="8" x2="12" y2="12"></line>
+                            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                        </svg>
+                        <span><?php echo htmlspecialchars($error_message); ?></span>
+                    </div>
+                <?php endif; ?>
+                
+                <?php if (!empty($success_message)): ?>
+                    <div class="alert alert-success">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                        <span><?php echo htmlspecialchars($success_message); ?></span>
+                    </div>
+                <?php endif; ?>
+
+                <!-- Formulario -->
+                <form id="loginForm" method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>">
+                    <div class="form-group">
+                        <label for="email" class="form-label">Correo electrónico</label>
+                        <div class="input-wrapper">
+                            <input 
+                                type="email" 
+                                class="form-input" 
+                                id="email" 
+                                name="email"
+                                value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>"
+                                placeholder="nombre@aac.edu.pe"
+                                required
+                                autocomplete="email"
+                                autofocus
+                            >
                         </div>
                     </div>
+
+                    <div class="form-group">
+                        <label for="password" class="form-label">Contraseña</label>
+                        <div class="input-wrapper">
+                            <input 
+                                type="password" 
+                                class="form-input" 
+                                id="password" 
+                                name="password"
+                                placeholder="Ingresa tu contraseña"
+                                required
+                                autocomplete="current-password"
+                            >
+                            <button type="button" class="password-toggle" id="togglePassword" aria-label="Mostrar contraseña">
+                                <svg class="eye-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                <svg class="eye-off-icon" style="display: none;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="form-options">
+                        <div class="checkbox-wrapper">
+                            <input type="checkbox" id="remember" name="remember" class="checkbox">
+                            <label for="remember" class="checkbox-label">Recordarme</label>
+                        </div>
+                        <a href="forgot_password.php" class="link">¿Olvidaste tu contraseña?</a>
+                    </div>
+
+                    <button type="submit" class="btn-primary" id="submitBtn">
+                        Iniciar sesión
+                    </button>
+                </form>
+
+                <div class="footer">
+                    <p><strong>I.E. <?php echo htmlspecialchars($nombre); ?></strong></p>
+                    <p>© <?php echo date('Y'); ?> Todos los derechos reservados</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="assets/libs/jquery/dist/jquery.min.js"></script>
-    <script src="assets/libs/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/iconify-icon@1.0.8/dist/iconify-icon.min.js"></script>
-    
     <script>
-        $(document).ready(function() {
-            // Toggle password visibility
-            $('#togglePassword').click(function() {
-                const passwordField = $('#password');
-                const icon = $(this);
-                
-                if (passwordField.attr('type') === 'password') {
-                    passwordField.attr('type', 'text');
-                    icon.attr('icon', 'mdi:eye-off');
-                } else {
-                    passwordField.attr('type', 'password');
-                    icon.attr('icon', 'mdi:eye');
-                }
-            });
+        // Toggle password visibility
+        const togglePassword = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('password');
+        const eyeIcon = togglePassword.querySelector('.eye-icon');
+        const eyeOffIcon = togglePassword.querySelector('.eye-off-icon');
+
+        togglePassword.addEventListener('click', () => {
+            const type = passwordInput.type === 'password' ? 'text' : 'password';
+            passwordInput.type = type;
             
-            // Form submission with loading state
-            $('#loginForm').on('submit', function(e) {
-                const form = $(this);
-                const submitBtn = form.find('button[type="submit"]');
-                
-                // Add loading state
-                form.addClass('loading');
-                submitBtn.prop('disabled', true);
-                
-                // Simple client-side validation
-                const email = $('#email').val().trim();
-                const password = $('#password').val().trim();
-                
-                if (!email || !password) {
-                    e.preventDefault();
-                    form.removeClass('loading');
-                    submitBtn.prop('disabled', false);
-                    alert('Por favor, complete todos los campos.');
-                    return false;
-                }
-                
-                if (!isValidEmail(email)) {
-                    e.preventDefault();
-                    form.removeClass('loading');
-                    submitBtn.prop('disabled', false);
-                    alert('Por favor, ingrese un email válido.');
-                    return false;
-                }
-            });
-            
-            // Email validation function
-            function isValidEmail(email) {
-                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                return emailRegex.test(email);
-            }
-            
-            // Auto-hide alerts after 5 seconds
-            setTimeout(function() {
-                $('.alert').fadeOut('slow');
-            }, 5000);
-            
-            // Focus on first empty field
-            if ($('#email').val() === '') {
-                $('#email').focus();
+            if (type === 'text') {
+                eyeIcon.style.display = 'none';
+                eyeOffIcon.style.display = 'block';
             } else {
-                $('#password').focus();
+                eyeIcon.style.display = 'block';
+                eyeOffIcon.style.display = 'none';
             }
+        });
+
+        // Form submission
+        const loginForm = document.getElementById('loginForm');
+        const submitBtn = document.getElementById('submitBtn');
+
+        loginForm.addEventListener('submit', function(e) {
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value.trim();
+
+            if (!email || !password) {
+                e.preventDefault();
+                return;
+            }
+
+            submitBtn.classList.add('loading');
+            submitBtn.disabled = true;
+            submitBtn.textContent = '';
+        });
+
+        // Auto-hide alerts
+        const alerts = document.querySelectorAll('.alert');
+        alerts.forEach(alert => {
+            setTimeout(() => {
+                alert.style.animation = 'slideIn 0.3s ease-out reverse';
+                setTimeout(() => alert.remove(), 300);
+            }, 5000);
         });
     </script>
 </body>

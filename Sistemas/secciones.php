@@ -1,5 +1,35 @@
-<?php 
+<?php
+session_start();
+
+// Redirigir al index si no hay sesión iniciada
+if (session_status() !== PHP_SESSION_ACTIVE
+  || (!isset($_SESSION['usuario_id']) && !isset($_SESSION['usuario_id']) && empty($_SESSION['login_time']))) {
+  header('Location: ../index.php');
+  exit;
+} 
     require_once 'conexion/bd.php';
+
+                                        try {
+    $stmt_cp = $conexion->prepare("SELECT nombre, ruc, foto, direccion, refran FROM colegio_principal WHERE id = 1 LIMIT 1");
+    $stmt_cp->execute();
+    $colegio = $stmt_cp->fetch(PDO::FETCH_ASSOC);
+    if ($colegio) {
+        $colegio_nombre = isset($colegio['nombre']) ? $colegio['nombre'] : '';
+        $colegio_ruc    = isset($colegio['ruc']) ? $colegio['ruc'] : '';
+        $colegio_foto   = isset($colegio['foto']) ? $colegio['foto'] : '';
+        $colegio_direccion = isset($colegio['direccion']) ? $colegio['direccion'] : '';
+        $refran = isset($colegio['refran']) ? $colegio['refran'] : '';
+    }
+} catch (PDOException $e) {
+    error_log("Error fetching colegio_principal: " . $e->getMessage());
+}
+
+// Variables solicitadas (nombre, ruc, foto)
+$nombre = $colegio_nombre;
+$ruc    = $colegio_ruc;
+$foto   = $colegio_foto;
+$direccion = $colegio_direccion;
+$refran = $refran;
 
     // Obtener secciones con información de ocupación
     try {
@@ -69,8 +99,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Gestión de Secciones - ANDRÉS AVELINO CÁCERES</title>
-    <link rel="shortcut icon" type="image/png" href="../assets/images/logos/favicon.png" />
+    <title>Gestión de Secciones - <?php echo $nombre; ?></title>
+    <?php
+        $favicon = !empty($foto) ? htmlspecialchars($foto) : 'assets/favicons/favicon-32x32.png';
+    ?>
+    <link rel="shortcut icon" type="image/png" sizes="32x32" href="../<?php echo $favicon; ?>">
     <link rel="stylesheet" href="../assets/css/styles.min.css" />
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" />
     <style>
@@ -421,24 +454,7 @@
             <div class="container-fluid">
                 
                 <!-- Header -->
-                <header class="app-header">
-                    <nav class="navbar navbar-expand-lg navbar-light">
-                        <ul class="navbar-nav">
-                            <li class="nav-item d-block d-xl-none">
-                                <a class="nav-link sidebartoggler" id="headerCollapse" href="javascript:void(0)">
-                                    <i class="ti ti-menu-2"></i>
-                                </a>
-                            </li>
-                        </ul>
-                        <div class="navbar-collapse justify-content-end px-0" id="navbarNav">
-                            <ul class="navbar-nav flex-row ms-auto align-items-center justify-content-end">
-                                <li class="nav-item">
-                                    <span class="badge bg-primary fs-2 rounded-4 lh-sm">Sistema AAC</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </nav>
-                </header>
+                <?php include 'includes/header.php'; ?>
 
                 <!-- Page Title -->
                 <div class="row">
@@ -969,8 +985,88 @@
             });
         }
 
-        function exportarSecciones() {
-            window.open('reportes/exportar_secciones.php', '_blank');
+       function exportarSecciones() {
+            // Capturar solo las filas visibles (filtradas)
+            const filasVisibles = [];
+            
+            $('#tablaSecciones tbody tr:visible').each(function() {
+                const fila = $(this);
+                
+                // Código de sección
+                const seccion_codigo = fila.find('.seccion-codigo').text().trim();
+                
+                // Nivel y grado
+                const nivel = fila.find('td:eq(1) .nivel-badge').text().trim();
+                const grado = fila.find('td:eq(1) small').text().trim();
+                const nivel_grado = nivel + (grado ? ' - ' + grado : '');
+                
+                // Aula
+                const aula = fila.find('.aula-info').text().trim() || 'Sin aula';
+                
+                // Capacidad
+                const capacidad = fila.find('.capacidad-numero').text().trim();
+                
+                // Ocupación (del texto de la barra)
+                const ocupacion_texto = fila.find('.ocupacion-text').text().trim();
+                
+                // Porcentaje de ocupación (del texto de detalles)
+                const ocupacion_detalles = fila.find('.ocupacion-detalles').text().trim();
+                let porcentaje = '0';
+                if (ocupacion_detalles) {
+                    const match = ocupacion_detalles.match(/(\d+\.?\d*)%/);
+                    if (match) {
+                        porcentaje = match[1];
+                    }
+                }
+                
+                // Estados
+                const badges_estado = fila.find('td:eq(5) .estado-badge');
+                const estado_ocupacion = badges_estado.eq(0).text().trim();
+                const estado_general = badges_estado.eq(1).text().trim();
+                
+                // Período
+                const periodo_texto = fila.find('td:eq(6) small').text().trim().replace(/\s+/g, ' ');
+                
+                // Construir array con datos de la fila
+                filasVisibles.push([
+                    seccion_codigo,     // 0
+                    nivel_grado,        // 1
+                    aula,              // 2
+                    capacidad,         // 3
+                    ocupacion_texto,   // 4
+                    estado_general,    // 5
+                    estado_ocupacion,  // 6
+                    periodo_texto,     // 7
+                    porcentaje         // 8
+                ]);
+            });
+            
+            // Verificar si hay datos para exportar
+            if (filasVisibles.length === 0) {
+                Swal.fire({
+                    title: 'Sin datos',
+                    text: 'No hay secciones visibles para exportar. Ajusta los filtros.',
+                    icon: 'warning',
+                    confirmButtonColor: '#fd7e14'
+                });
+                return;
+            }
+            
+            // Crear formulario y enviar datos
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = 'reportes/exportar_secciones.php';
+            form.target = '_blank';
+            
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'datosSecciones';
+            input.value = JSON.stringify(filasVisibles);
+            
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+            document.body.removeChild(form);
         }
 
         function mostrarExito(mensaje) {

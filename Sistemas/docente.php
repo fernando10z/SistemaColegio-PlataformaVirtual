@@ -1,5 +1,35 @@
-<?php 
+<?php
+session_start();
+
+// Redirigir al index si no hay sesión iniciada
+if (session_status() !== PHP_SESSION_ACTIVE
+  || (!isset($_SESSION['usuario_id']) && !isset($_SESSION['usuario_id']) && empty($_SESSION['login_time']))) {
+  header('Location: ../index.php');
+  exit;
+}
     require_once 'conexion/bd.php';
+
+                        try {
+    $stmt_cp = $conexion->prepare("SELECT nombre, ruc, foto, direccion, refran FROM colegio_principal WHERE id = 1 LIMIT 1");
+    $stmt_cp->execute();
+    $colegio = $stmt_cp->fetch(PDO::FETCH_ASSOC);
+    if ($colegio) {
+        $colegio_nombre = isset($colegio['nombre']) ? $colegio['nombre'] : '';
+        $colegio_ruc    = isset($colegio['ruc']) ? $colegio['ruc'] : '';
+        $colegio_foto   = isset($colegio['foto']) ? $colegio['foto'] : '';
+        $colegio_direccion = isset($colegio['direccion']) ? $colegio['direccion'] : '';
+        $refran = isset($colegio['refran']) ? $colegio['refran'] : '';
+    }
+} catch (PDOException $e) {
+    error_log("Error fetching colegio_principal: " . $e->getMessage());
+}
+
+// Variables solicitadas (nombre, ruc, foto)
+$nombre = $colegio_nombre;
+$ruc    = $colegio_ruc;
+$foto   = $colegio_foto;
+$direccion = $colegio_direccion;
+$refran = $refran;
 
     // Obtener docentes con información completa
     try {
@@ -74,8 +104,11 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Gestión de Docentes - ANDRÉS AVELINO CÁCERES</title>
-    <link rel="shortcut icon" type="image/png" href="../assets/images/logos/favicon.png" />
+    <title>Gestión de Docentes - <?php echo $nombre; ?></title>
+    <?php
+        $favicon = !empty($foto) ? htmlspecialchars($foto) : 'assets/favicons/favicon-32x32.png';
+    ?>
+    <link rel="shortcut icon" type="image/png" sizes="32x32" href="../<?php echo $favicon; ?>">
     <link rel="stylesheet" href="../assets/css/styles.min.css" />
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" />
     <style>
@@ -406,24 +439,7 @@
             <div class="container-fluid">
                 
                 <!-- Header -->
-                <header class="app-header">
-                    <nav class="navbar navbar-expand-lg navbar-light">
-                        <ul class="navbar-nav">
-                            <li class="nav-item d-block d-xl-none">
-                                <a class="nav-link sidebartoggler" id="headerCollapse" href="javascript:void(0)">
-                                    <i class="ti ti-menu-2"></i>
-                                </a>
-                            </li>
-                        </ul>
-                        <div class="navbar-collapse justify-content-end px-0" id="navbarNav">
-                            <ul class="navbar-nav flex-row ms-auto align-items-center justify-content-end">
-                                <li class="nav-item">
-                                    <span class="badge bg-primary fs-2 rounded-4 lh-sm">Sistema AAC</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </nav>
-                </header>
+                <?php include 'includes/header.php'; ?>
 
                 <!-- Page Title -->
                 <div class="row">
@@ -1078,7 +1094,139 @@
         }
 
         function exportarDocentes() {
-            window.open('reportes/exportar_docentes.php', '_blank');
+            // Capturar solo las filas visibles (filtradas)
+            const docentesVisibles = [];
+            
+            $('#tablaDocentes tbody tr:visible').each(function() {
+                const fila = $(this);
+                
+                // Docente (nombre + código + documento)
+                const nombre_docente = fila.find('.docente-nombre').text().trim();
+                const codigo_docente = fila.find('.docente-codigo').text().trim();
+                const documento = fila.find('td:eq(0) small').text().trim();
+                const docente = nombre_docente + '\n' + codigo_docente + '\n' + documento;
+                
+                // Datos Profesionales (grado + universidad + colegiatura)
+                const grado_academico = fila.find('td:eq(1) strong').text().trim();
+                const universidad = fila.find('td:eq(1) small').first().text().trim();
+                let colegiatura = '';
+                const colegiaturaElement = fila.find('td:eq(1) .colegiatura-info .badge');
+                if (colegiaturaElement.length > 0) {
+                    colegiatura = colegiaturaElement.text().trim();
+                }
+                const datos_profesionales = grado_academico + '\n' + universidad + 
+                    (colegiatura ? '\n' + colegiatura : '');
+                
+                // Especialidades
+                const especialidades_badges = fila.find('td:eq(2) .especialidad-badge');
+                let especialidades = '';
+                if (especialidades_badges.length > 0) {
+                    const especialidades_array = [];
+                    especialidades_badges.each(function() {
+                        especialidades_array.push($(this).text().trim());
+                    });
+                    especialidades = especialidades_array.join('\n');
+                } else {
+                    const especialidad_texto = fila.find('td:eq(2) small').text().trim();
+                    especialidades = especialidad_texto || 'Sin especialidades asignadas';
+                }
+                
+                // Datos Laborales (categoría + contrato + experiencia)
+                let datos_laborales = '';
+                const categoria_badge = fila.find('td:eq(3) .categoria-badge');
+                if (categoria_badge.length > 0) {
+                    datos_laborales += categoria_badge.text().trim();
+                }
+                const contrato_badge = fila.find('td:eq(3) .badge.bg-secondary');
+                if (contrato_badge.length > 0) {
+                    datos_laborales += '\n' + contrato_badge.text().trim();
+                }
+                const experiencia_badge = fila.find('td:eq(3) .experiencia-badge');
+                if (experiencia_badge.length > 0) {
+                    datos_laborales += '\n' + experiencia_badge.text().trim();
+                }
+                
+                // Asignaciones
+                const num_asignaciones = fila.find('.asignaciones-numero').text().trim();
+                const num_secciones = fila.find('td:eq(4) small').text().trim();
+                const asignaciones = num_asignaciones + '\n' + num_secciones;
+                
+                // Usuario
+                let usuario = '';
+                const usuario_badge = fila.find('td:eq(5) .badge').first();
+                if (usuario_badge.length > 0) {
+                    usuario = usuario_badge.text().trim();
+                    const username = fila.find('td:eq(5) small').text().trim();
+                    if (username) {
+                        usuario += '\n' + username;
+                    }
+                } else {
+                    usuario = 'Sin usuario';
+                }
+                
+                // Estado
+                const estado = fila.find('td:eq(6) .badge').text().trim();
+                
+                // Construir array con datos de la fila
+                docentesVisibles.push([
+                    docente,               // 0
+                    datos_profesionales,   // 1
+                    especialidades,        // 2
+                    datos_laborales,       // 3
+                    asignaciones,          // 4
+                    usuario,               // 5
+                    estado                 // 6
+                ]);
+            });
+            
+            // Verificar si hay datos para exportar
+            if (docentesVisibles.length === 0) {
+                Swal.fire({
+                    title: 'Sin datos',
+                    text: 'No hay docentes visibles para exportar. Ajusta los filtros.',
+                    icon: 'warning',
+                    confirmButtonColor: '#fd7e14'
+                });
+                return;
+            }
+            
+            // Mostrar confirmación
+            Swal.fire({
+                title: 'Exportar Docentes',
+                text: `Se exportarán ${docentesVisibles.length} registro(s) de docentes.`,
+                icon: 'info',
+                showCancelButton: true,
+                confirmButtonColor: '#0d6efd',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Sí, exportar',
+                cancelButtonText: 'Cancelar'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Crear formulario y enviar datos
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = 'reportes/exportar_docentes.php';
+                    form.target = '_blank';
+                    
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'datosDocentes';
+                    input.value = JSON.stringify(docentesVisibles);
+                    
+                    form.appendChild(input);
+                    document.body.appendChild(form);
+                    form.submit();
+                    document.body.removeChild(form);
+                    
+                    Swal.fire({
+                        title: '¡Exportando!',
+                        text: 'Se está generando el reporte PDF...',
+                        icon: 'success',
+                        timer: 1500,
+                        showConfirmButton: false
+                    });
+                }
+            });
         }
 
         function mostrarExito(mensaje) {
