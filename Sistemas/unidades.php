@@ -3,87 +3,156 @@ session_start();
 
 // Redirigir al index si no hay sesión iniciada
 if (session_status() !== PHP_SESSION_ACTIVE
-  || (!isset($_SESSION['usuario_id']) && !isset($_SESSION['usuario_id']) && empty($_SESSION['login_time']))) {
+  || (!isset($_SESSION['usuario_id']) && empty($_SESSION['login_time']))) {
   header('Location: ../index.php');
   exit;
 }
-    require_once 'conexion/bd.php';
-                                            try {
+
+require_once 'conexion/bd.php';
+
+// ==========================================
+// OBTENER ROL Y DATOS DEL USUARIO EN SESIÓN
+// ==========================================
+$usuario_id = $_SESSION['usuario_id'];
+$rol_usuario = null;
+$docente_id = null;
+$es_docente = false;
+
+try {
+    // Obtener rol del usuario
+    $stmt_rol = $conexion->prepare("SELECT rol_id FROM usuarios WHERE id = ? LIMIT 1");
+    $stmt_rol->execute([$usuario_id]);
+    $usuario_data = $stmt_rol->fetch(PDO::FETCH_ASSOC);
+    
+    if ($usuario_data) {
+        $rol_usuario = intval($usuario_data['rol_id']);
+        $es_docente = ($rol_usuario === 4); // Rol 4 = Docente
+        
+        // Si es docente, obtener su docente_id
+        if ($es_docente) {
+            $stmt_docente = $conexion->prepare("SELECT id FROM docentes WHERE usuario_id = ? AND activo = 1 LIMIT 1");
+            $stmt_docente->execute([$usuario_id]);
+            $docente_data = $stmt_docente->fetch(PDO::FETCH_ASSOC);
+            
+            if ($docente_data) {
+                $docente_id = intval($docente_data['id']);
+            } else {
+                die('Error: No se encontró registro de docente asociado a su usuario.');
+            }
+        }
+    }
+} catch (PDOException $e) {
+    error_log("Error obteniendo datos de usuario: " . $e->getMessage());
+    die('Error al verificar permisos de usuario.');
+}
+
+// Obtener datos del colegio
+try {
     $stmt_cp = $conexion->prepare("SELECT nombre, ruc, foto, direccion, refran FROM colegio_principal WHERE id = 1 LIMIT 1");
     $stmt_cp->execute();
     $colegio = $stmt_cp->fetch(PDO::FETCH_ASSOC);
     if ($colegio) {
-        $colegio_nombre = isset($colegio['nombre']) ? $colegio['nombre'] : '';
-        $colegio_ruc    = isset($colegio['ruc']) ? $colegio['ruc'] : '';
-        $colegio_foto   = isset($colegio['foto']) ? $colegio['foto'] : '';
-        $colegio_direccion = isset($colegio['direccion']) ? $colegio['direccion'] : '';
-        $refran = isset($colegio['refran']) ? $colegio['refran'] : '';
+        $colegio_nombre = $colegio['nombre'] ?? '';
+        $colegio_ruc = $colegio['ruc'] ?? '';
+        $colegio_foto = $colegio['foto'] ?? '';
+        $colegio_direccion = $colegio['direccion'] ?? '';
+        $refran = $colegio['refran'] ?? '';
     }
 } catch (PDOException $e) {
     error_log("Error fetching colegio_principal: " . $e->getMessage());
 }
 
-// Variables solicitadas (nombre, ruc, foto)
 $nombre = $colegio_nombre;
-$ruc    = $colegio_ruc;
-$foto   = $colegio_foto;
+$ruc = $colegio_ruc;
+$foto = $colegio_foto;
 $direccion = $colegio_direccion;
-$refran = $refran;
 
-    // Obtener unidades con información completa
-    try {
-        $sql = "SELECT u.*, 
-                    c.nombre as curso_nombre,
-                    c.codigo_curso,
-                    COUNT(DISTINCT l.id) as total_lecciones,
-                    COUNT(DISTINCT CASE WHEN l.tipo = 'CONTENIDO' THEN l.id END) as lecciones_contenido,
-                    COUNT(DISTINCT CASE WHEN l.tipo = 'EVALUACION' THEN l.id END) as lecciones_evaluacion
-                FROM unidades u
-                INNER JOIN cursos c ON u.curso_id = c.id
-                LEFT JOIN lecciones l ON u.id = l.unidad_id
-                GROUP BY u.id
-                ORDER BY c.nombre ASC, u.orden ASC";
-        
-        $stmt_unidades = $conexion->prepare($sql);
-        $stmt_unidades->execute();
-        $unidades = $stmt_unidades->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-        $unidades = [];
-        $error_unidades = "Error al cargar unidades: " . $e->getMessage();
-    }
-
-    // Obtener cursos para filtros y modal
-    try {
-        $stmt_cursos = $conexion->prepare("
-            SELECT c.*, 
-                   d.nombres as docente_nombres, 
-                   d.apellidos as docente_apellidos
-            FROM cursos c
+// ==========================================
+// OBTENER UNIDADES (FILTRADO POR ROL)
+// ==========================================
+try {
+    $sql = "SELECT u.*, 
+                c.nombre as curso_nombre,
+                c.codigo_curso,
+                c.id as curso_id,
+                ad.docente_id,
+                COUNT(DISTINCT l.id) as total_lecciones,
+                COUNT(DISTINCT CASE WHEN l.tipo = 'CONTENIDO' THEN l.id END) as lecciones_contenido,
+                COUNT(DISTINCT CASE WHEN l.tipo = 'EVALUACION' THEN l.id END) as lecciones_evaluacion
+            FROM unidades u
+            INNER JOIN cursos c ON u.curso_id = c.id
             INNER JOIN asignaciones_docentes ad ON c.asignacion_id = ad.id
-            INNER JOIN docentes d ON ad.docente_id = d.id
-            ORDER BY c.nombre ASC
-        ");
-        $stmt_cursos->execute();
-        $cursos = $stmt_cursos->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-        $cursos = [];
+            LEFT JOIN lecciones l ON u.id = l.unidad_id";
+    
+    // FILTRO: Si es docente, solo sus unidades
+    if ($es_docente && $docente_id) {
+        $sql .= " WHERE ad.docente_id = :docente_id";
     }
-
-    // Calcular estadísticas
-    $total_unidades = count($unidades);
-    $unidades_publicadas = count(array_filter($unidades, function($u) { 
-        $config = json_decode($u['configuraciones'], true);
-        return ($config['estado'] ?? '') === 'PUBLICADO'; 
-    }));
-    $unidades_borrador = $total_unidades - $unidades_publicadas;
-    $total_lecciones = array_sum(array_column($unidades, 'total_lecciones'));
-
-    // Estadísticas por curso
-    $unidades_por_curso = [];
-    foreach ($unidades as $unidad) {
-        $curso = $unidad['curso_nombre'];
-        $unidades_por_curso[$curso] = ($unidades_por_curso[$curso] ?? 0) + 1;
+    
+    $sql .= " GROUP BY u.id
+             ORDER BY c.nombre ASC, u.orden ASC";
+    
+    $stmt_unidades = $conexion->prepare($sql);
+    
+    if ($es_docente && $docente_id) {
+        $stmt_unidades->bindParam(':docente_id', $docente_id, PDO::PARAM_INT);
     }
+    
+    $stmt_unidades->execute();
+    $unidades = $stmt_unidades->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $unidades = [];
+    $error_unidades = "Error al cargar unidades: " . $e->getMessage();
+    error_log($error_unidades);
+}
+
+// ==========================================
+// OBTENER CURSOS (FILTRADO POR ROL)
+// ==========================================
+try {
+    $sql_cursos = "SELECT c.*, 
+                       ad.docente_id,
+                       d.nombres as docente_nombres, 
+                       d.apellidos as docente_apellidos
+                   FROM cursos c
+                   INNER JOIN asignaciones_docentes ad ON c.asignacion_id = ad.id
+                   INNER JOIN docentes d ON ad.docente_id = d.id";
+    
+    // FILTRO: Si es docente, solo sus cursos
+    if ($es_docente && $docente_id) {
+        $sql_cursos .= " WHERE ad.docente_id = :docente_id";
+    }
+    
+    $sql_cursos .= " ORDER BY c.nombre ASC";
+    
+    $stmt_cursos = $conexion->prepare($sql_cursos);
+    
+    if ($es_docente && $docente_id) {
+        $stmt_cursos->bindParam(':docente_id', $docente_id, PDO::PARAM_INT);
+    }
+    
+    $stmt_cursos->execute();
+    $cursos = $stmt_cursos->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $cursos = [];
+    error_log("Error al cargar cursos: " . $e->getMessage());
+}
+
+// Calcular estadísticas
+$total_unidades = count($unidades);
+$unidades_publicadas = count(array_filter($unidades, function($u) { 
+    $config = json_decode($u['configuraciones'], true);
+    return ($config['estado'] ?? '') === 'PUBLICADO'; 
+}));
+$unidades_borrador = $total_unidades - $unidades_publicadas;
+$total_lecciones = array_sum(array_column($unidades, 'total_lecciones'));
+
+// Estadísticas por curso
+$unidades_por_curso = [];
+foreach ($unidades as $unidad) {
+    $curso = $unidad['curso_nombre'];
+    $unidades_por_curso[$curso] = ($unidades_por_curso[$curso] ?? 0) + 1;
+}
 ?>
 
 <!doctype html>
@@ -91,7 +160,7 @@ $refran = $refran;
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Gestión de Unidades - <?php echo $nombre; ?></title>
+    <title><?= $es_docente ? 'Mis Unidades' : 'Gestión de Unidades' ?> - <?php echo $nombre; ?></title>
     <?php
         $favicon = !empty($foto) ? htmlspecialchars($foto) : 'assets/favicons/favicon-32x32.png';
     ?>
@@ -213,32 +282,22 @@ $refran = $refran;
             <div class="container-fluid">
                 
                 <!-- Header -->
-                <header class="app-header">
-                    <nav class="navbar navbar-expand-lg navbar-light">
-                        <ul class="navbar-nav">
-                            <li class="nav-item d-block d-xl-none">
-                                <a class="nav-link sidebartoggler" id="headerCollapse" href="javascript:void(0)">
-                                    <i class="ti ti-menu-2"></i>
-                                </a>
-                            </li>
-                        </ul>
-                        <div class="navbar-collapse justify-content-end px-0" id="navbarNav">
-                            <ul class="navbar-nav flex-row ms-auto align-items-center justify-content-end">
-                                <li class="nav-item">
-                                    <span class="badge bg-primary fs-2 rounded-4 lh-sm">Sistema AAC</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </nav>
-                </header>
+                <?php include 'includes/header.php'; ?>
 
                 <!-- Page Title -->
                 <div class="row">
                     <div class="col-12">
                         <div class="d-flex align-items-center justify-content-between mb-4">
                             <div>
-                                <h4 class="fw-bold mb-0">Gestión de Unidades Didácticas</h4>
-                                <p class="mb-0 text-muted">Organiza el contenido de los cursos en unidades temáticas</p>
+                                <h4 class="fw-bold mb-0">
+                                    <?= $es_docente ? 'Mis Unidades Didácticas' : 'Gestión de Unidades Didácticas' ?>
+                                </h4>
+                                <p class="mb-0 text-muted">
+                                    <?= $es_docente 
+                                        ? 'Organiza el contenido de tus cursos en unidades temáticas' 
+                                        : 'Organiza el contenido de los cursos en unidades temáticas' 
+                                    ?>
+                                </p>
                             </div>
                             <div class="d-flex gap-2">
                                 <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAgregarUnidad">
@@ -256,7 +315,9 @@ $refran = $refran;
                         <div class="stats-card">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div>
-                                    <h6 class="mb-1 opacity-75">Total Unidades</h6>
+                                    <h6 class="mb-1 opacity-75">
+                                        <?= $es_docente ? 'Mis Unidades' : 'Total Unidades' ?>
+                                    </h6>
                                     <h3 class="mb-0 fw-bold"><?= $total_unidades ?></h3>
                                 </div>
                                 <i class="ti ti-book-2 stats-icon"></i>
@@ -302,7 +363,7 @@ $refran = $refran;
                 <div class="card mb-4">
                     <div class="card-body">
                         <div class="row g-3">
-                            <div class="col-md-4">
+                            <div class="col-md-<?= $es_docente ? '5' : '4' ?>">
                                 <label class="form-label">Curso</label>
                                 <select class="form-select" id="filtroCurso">
                                     <option value="">Todos los cursos</option>
@@ -311,7 +372,7 @@ $refran = $refran;
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-<?= $es_docente ? '3' : '3' ?>">
                                 <label class="form-label">Estado</label>
                                 <select class="form-select" id="filtroEstado">
                                     <option value="">Todos</option>
@@ -319,19 +380,21 @@ $refran = $refran;
                                     <option value="BORRADOR">Borrador</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-<?= $es_docente ? '4' : '3' ?>">
                                 <label class="form-label">Buscar</label>
                                 <input type="text" class="form-control" id="buscarUnidad" placeholder="Buscar por título...">
                             </div>
                             <div class="col-md-2">
                                 <label class="form-label">&nbsp;</label>
                                 <div class="d-flex gap-1">
-                                    <button type="button" class="btn btn-outline-secondary flex-fill" onclick="limpiarFiltros()">
+                                    <button type="button" class="btn btn-outline-secondary flex-fill" onclick="limpiarFiltros()" title="Limpiar Filtros">
                                         <i class="ti ti-refresh"></i>
                                     </button>
-                                    <button type="button" class="btn btn-outline-info flex-fill" onclick="exportarUnidades()">
+                                    <?php if (!$es_docente): ?>
+                                    <button type="button" class="btn btn-outline-info flex-fill" onclick="exportarUnidades()" title="Exportar">
                                         <i class="ti ti-download"></i>
                                     </button>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                         </div>
@@ -340,120 +403,136 @@ $refran = $refran;
 
                 <!-- Lista de Unidades -->
                 <div class="row" id="unidadesContainer">
-                    <?php foreach ($unidades as $unidad): 
-                        $configuraciones = json_decode($unidad['configuraciones'], true) ?: [];
-                        $estado = $configuraciones['estado'] ?? 'BORRADOR';
-                        $fecha_inicio = $configuraciones['fecha_inicio'] ?? null;
-                        $fecha_fin = $configuraciones['fecha_fin'] ?? null;
-                        
-                        // Calcular progreso
-                        $progreso = 0;
-                        if ($fecha_inicio && $fecha_fin) {
-                            $inicio = strtotime($fecha_inicio);
-                            $fin = strtotime($fecha_fin);
-                            $hoy = time();
+                    <?php if (empty($unidades)): ?>
+                        <div class="col-12">
+                            <div class="alert alert-info text-center">
+                                <i class="ti ti-info-circle me-2"></i>
+                                <?= $es_docente 
+                                    ? 'No tienes unidades didácticas creadas. Crea una unidad para organizar el contenido de tus cursos.' 
+                                    : 'No hay unidades didácticas registradas en el sistema.' 
+                                ?>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <?php foreach ($unidades as $unidad): 
+                            $configuraciones = json_decode($unidad['configuraciones'], true) ?: [];
+                            $estado = $configuraciones['estado'] ?? 'BORRADOR';
+                            $fecha_inicio = $configuraciones['fecha_inicio'] ?? null;
+                            $fecha_fin = $configuraciones['fecha_fin'] ?? null;
                             
-                            if ($hoy >= $inicio && $hoy <= $fin) {
-                                $total = $fin - $inicio;
-                                $transcurrido = $hoy - $inicio;
-                                $progreso = min(100, ($transcurrido / $total) * 100);
-                            } elseif ($hoy > $fin) {
-                                $progreso = 100;
-                            }
-                        }
-                    ?>
-                        <div class="col-md-6 mb-3 unidad-item" 
-                             data-curso="<?= $unidad['curso_id'] ?>" 
-                             data-estado="<?= $estado ?>">
-                            <div class="card unidad-card">
-                                <div class="unidad-header">
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <div class="d-flex align-items-center gap-3">
-                                            <div class="unidad-orden"><?= $unidad['orden'] ?></div>
-                                            <div>
-                                                <h5 class="mb-1"><?= htmlspecialchars($unidad['titulo']) ?></h5>
-                                                <p class="mb-0 opacity-75 small curso-info">
-                                                    <i class="ti ti-book me-1"></i>
-                                                    <?= htmlspecialchars($unidad['curso_nombre']) ?>
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <span class="badge estado-badge <?= $estado === 'PUBLICADO' ? 'bg-success' : 'bg-warning' ?>">
-                                            <?= $estado ?>
-                                        </span>
-                                    </div>
-                                </div>
+                            // Calcular progreso
+                            $progreso = 0;
+                            if ($fecha_inicio && $fecha_fin) {
+                                $inicio = strtotime($fecha_inicio);
+                                $fin = strtotime($fecha_fin);
+                                $hoy = time();
                                 
-                                <div class="card-body">
-                                    <?php if ($unidad['descripcion']): ?>
-                                        <p class="text-muted small mb-3">
-                                            <?= htmlspecialchars(substr($unidad['descripcion'], 0, 120)) ?>
-                                            <?= strlen($unidad['descripcion']) > 120 ? '...' : '' ?>
-                                        </p>
-                                    <?php endif; ?>
-                                    
-                                    <div class="row g-2 mb-3">
-                                        <div class="col-6">
-                                            <div class="d-flex align-items-center gap-2">
-                                                <span class="badge lecciones-badge bg-primary">
-                                                    <i class="ti ti-file-text me-1"></i>
-                                                    <?= $unidad['total_lecciones'] ?> Lecciones
-                                                </span>
+                                if ($hoy >= $inicio && $hoy <= $fin) {
+                                    $total = $fin - $inicio;
+                                    $transcurrido = $hoy - $inicio;
+                                    $progreso = min(100, ($transcurrido / $total) * 100);
+                                } elseif ($hoy > $fin) {
+                                    $progreso = 100;
+                                }
+                            }
+                        ?>
+                            <div class="col-md-6 mb-3 unidad-item" 
+                                 data-curso="<?= $unidad['curso_id'] ?>" 
+                                 data-estado="<?= $estado ?>">
+                                <div class="card unidad-card">
+                                    <div class="unidad-header">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div class="d-flex align-items-center gap-3">
+                                                <div class="unidad-orden"><?= $unidad['orden'] ?></div>
+                                                <div>
+                                                    <h5 class="mb-1"><?= htmlspecialchars($unidad['titulo']) ?></h5>
+                                                    <p class="mb-0 opacity-75 small curso-info">
+                                                        <i class="ti ti-book me-1"></i>
+                                                        <?= htmlspecialchars($unidad['curso_nombre']) ?>
+                                                    </p>
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div class="col-6">
-                                            <div class="d-flex align-items-center gap-2">
-                                                <span class="badge lecciones-badge bg-info">
-                                                    <i class="ti ti-clipboard-check me-1"></i>
-                                                    <?= $unidad['lecciones_evaluacion'] ?> Evaluaciones
-                                                </span>
-                                            </div>
+                                            <span class="badge estado-badge <?= $estado === 'PUBLICADO' ? 'bg-success' : 'bg-warning' ?>">
+                                                <?= $estado ?>
+                                            </span>
                                         </div>
                                     </div>
                                     
-                                    <?php if ($fecha_inicio && $fecha_fin): ?>
-                                        <div class="mb-3">
-                                            <div class="d-flex justify-content-between mb-1">
-                                                <small class="fecha-info">
-                                                    <i class="ti ti-calendar me-1"></i>
-                                                    <?= date('d/m/Y', strtotime($fecha_inicio)) ?>
-                                                </small>
-                                                <small class="fecha-info">
-                                                    <i class="ti ti-calendar-event me-1"></i>
-                                                    <?= date('d/m/Y', strtotime($fecha_fin)) ?>
-                                                </small>
+                                    <div class="card-body">
+                                        <?php if ($unidad['descripcion']): ?>
+                                            <p class="text-muted small mb-3">
+                                                <?= htmlspecialchars(substr($unidad['descripcion'], 0, 120)) ?>
+                                                <?= strlen($unidad['descripcion']) > 120 ? '...' : '' ?>
+                                            </p>
+                                        <?php endif; ?>
+                                        
+                                        <div class="row g-2 mb-3">
+                                            <div class="col-6">
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <span class="badge lecciones-badge bg-primary">
+                                                        <i class="ti ti-file-text me-1"></i>
+                                                        <?= $unidad['total_lecciones'] ?> Lecciones
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <div class="progress progress-thin">
-                                                <div class="progress-bar" role="progressbar" 
-                                                     style="width: <?= $progreso ?>%" 
-                                                     aria-valuenow="<?= $progreso ?>" 
-                                                     aria-valuemin="0" aria-valuemax="100"></div>
+                                            <div class="col-6">
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <span class="badge lecciones-badge bg-info">
+                                                        <i class="ti ti-clipboard-check me-1"></i>
+                                                        <?= $unidad['lecciones_evaluacion'] ?> Evaluaciones
+                                                    </span>
+                                                </div>
                                             </div>
-                                            <small class="text-muted"><?= round($progreso) ?>% completado</small>
                                         </div>
-                                    <?php endif; ?>
-                                    
-                                    <div class="d-flex gap-2 flex-wrap">
-                                        <button type="button" class="btn btn-sm btn-outline-primary" 
-                                                onclick="editarUnidad(<?= $unidad['id'] ?>)">
-                                            <i class="ti ti-edit"></i> Editar
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-outline-info" 
-                                                onclick="gestionarLecciones(<?= $unidad['id'] ?>)">
-                                            <i class="ti ti-list-details"></i> Lecciones
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-outline-danger" 
-                                                onclick="eliminarUnidad(<?= $unidad['id'] ?>)">
-                                            <i class="ti ti-trash"></i> Eliminar
-                                        </button>
+                                        
+                                        <?php if ($fecha_inicio && $fecha_fin): ?>
+                                            <div class="mb-3">
+                                                <div class="d-flex justify-content-between mb-1">
+                                                    <small class="fecha-info">
+                                                        <i class="ti ti-calendar me-1"></i>
+                                                        <?= date('d/m/Y', strtotime($fecha_inicio)) ?>
+                                                    </small>
+                                                    <small class="fecha-info">
+                                                        <i class="ti ti-calendar-event me-1"></i>
+                                                        <?= date('d/m/Y', strtotime($fecha_fin)) ?>
+                                                    </small>
+                                                </div>
+                                                <div class="progress progress-thin">
+                                                    <div class="progress-bar" role="progressbar" 
+                                                         style="width: <?= $progreso ?>%" 
+                                                         aria-valuenow="<?= $progreso ?>" 
+                                                         aria-valuemin="0" aria-valuemax="100"></div>
+                                                </div>
+                                                <small class="text-muted"><?= round($progreso) ?>% completado</small>
+                                            </div>
+                                        <?php endif; ?>
+                                        
+                                        <div class="d-flex gap-2 flex-wrap">
+                                            <button type="button" class="btn btn-sm btn-outline-primary" 
+                                                    onclick="editarUnidad(<?= $unidad['id'] ?>)">
+                                                <i class="ti ti-edit"></i> Editar
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-outline-info" 
+                                                    onclick="gestionarLecciones(<?= $unidad['id'] ?>)">
+                                                <i class="ti ti-list-details"></i> Lecciones
+                                            </button>
+                                            <?php if (!$es_docente): ?>
+                                            <!-- Solo admin puede eliminar -->
+                                            <button type="button" class="btn btn-sm btn-outline-danger" 
+                                                    onclick="eliminarUnidad(<?= $unidad['id'] ?>)">
+                                                <i class="ti ti-trash"></i> Eliminar
+                                            </button>
+                                            <?php endif; ?>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </div>
 
                 <!-- Distribución por Curso -->
+                <?php if (!empty($unidades_por_curso)): ?>
                 <div class="card mt-4">
                     <div class="card-header">
                         <h6 class="mb-0">Distribución de Unidades por Curso</h6>
@@ -467,6 +546,7 @@ $refran = $refran;
                         <?php endforeach; ?>
                     </div>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -492,6 +572,7 @@ $refran = $refran;
 
     <script>
         const cursos = <?= json_encode($cursos) ?>;
+        const esDocente = <?= $es_docente ? 'true' : 'false' ?>;
 
         $(document).ready(function() {
             // Filtros personalizados
@@ -571,6 +652,7 @@ $refran = $refran;
             window.location.href = `lecciones.php?unidad_id=${id}`;
         }
 
+        <?php if (!$es_docente): ?>
         function eliminarUnidad(id) {
             Swal.fire({
                 title: '¿Eliminar Unidad?',
@@ -616,6 +698,7 @@ $refran = $refran;
         function exportarUnidades() {
             window.open('reportes/exportar_unidades.php', '_blank');
         }
+        <?php endif; ?>
 
         function mostrarExito(mensaje) {
             Swal.fire({

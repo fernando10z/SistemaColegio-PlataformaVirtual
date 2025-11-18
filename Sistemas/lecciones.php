@@ -1,109 +1,199 @@
 <?php 
-    session_start();
+session_start();
 
 // Redirigir al index si no hay sesión iniciada
 if (session_status() !== PHP_SESSION_ACTIVE
-  || (!isset($_SESSION['usuario_id']) && !isset($_SESSION['usuario_id']) && empty($_SESSION['login_time']))) {
+  || (!isset($_SESSION['usuario_id']) && empty($_SESSION['login_time']))) {
   header('Location: ../index.php');
   exit;
 }
-    
-    require_once 'conexion/bd.php';
 
-                        try {
+require_once 'conexion/bd.php';
+
+// ==========================================
+// OBTENER ROL Y DATOS DEL USUARIO EN SESIÓN
+// ==========================================
+$usuario_id = $_SESSION['usuario_id'];
+$rol_usuario = null;
+$docente_id = null;
+$es_docente = false;
+
+try {
+    // Obtener rol del usuario
+    $stmt_rol = $conexion->prepare("SELECT rol_id FROM usuarios WHERE id = ? LIMIT 1");
+    $stmt_rol->execute([$usuario_id]);
+    $usuario_data = $stmt_rol->fetch(PDO::FETCH_ASSOC);
+    
+    if ($usuario_data) {
+        $rol_usuario = intval($usuario_data['rol_id']);
+        $es_docente = ($rol_usuario === 4); // Rol 4 = Docente
+        
+        // Si es docente, obtener su docente_id
+        if ($es_docente) {
+            $stmt_docente = $conexion->prepare("SELECT id FROM docentes WHERE usuario_id = ? AND activo = 1 LIMIT 1");
+            $stmt_docente->execute([$usuario_id]);
+            $docente_data = $stmt_docente->fetch(PDO::FETCH_ASSOC);
+            
+            if ($docente_data) {
+                $docente_id = intval($docente_data['id']);
+            } else {
+                die('Error: No se encontró registro de docente asociado a su usuario.');
+            }
+        }
+    }
+} catch (PDOException $e) {
+    error_log("Error obteniendo datos de usuario: " . $e->getMessage());
+    die('Error al verificar permisos de usuario.');
+}
+
+// Obtener datos del colegio
+try {
     $stmt_cp = $conexion->prepare("SELECT nombre, ruc, foto, direccion, refran FROM colegio_principal WHERE id = 1 LIMIT 1");
     $stmt_cp->execute();
     $colegio = $stmt_cp->fetch(PDO::FETCH_ASSOC);
     if ($colegio) {
-        $colegio_nombre = isset($colegio['nombre']) ? $colegio['nombre'] : '';
-        $colegio_ruc    = isset($colegio['ruc']) ? $colegio['ruc'] : '';
-        $colegio_foto   = isset($colegio['foto']) ? $colegio['foto'] : '';
-        $colegio_direccion = isset($colegio['direccion']) ? $colegio['direccion'] : '';
-        $refran = isset($colegio['refran']) ? $colegio['refran'] : '';
+        $colegio_nombre = $colegio['nombre'] ?? '';
+        $colegio_ruc = $colegio['ruc'] ?? '';
+        $colegio_foto = $colegio['foto'] ?? '';
+        $colegio_direccion = $colegio['direccion'] ?? '';
+        $refran = $colegio['refran'] ?? '';
     }
 } catch (PDOException $e) {
     error_log("Error fetching colegio_principal: " . $e->getMessage());
 }
 
-// Variables solicitadas (nombre, ruc, foto)
 $nombre = $colegio_nombre;
-$ruc    = $colegio_ruc;
-$foto   = $colegio_foto;
+$ruc = $colegio_ruc;
+$foto = $colegio_foto;
 $direccion = $colegio_direccion;
-$refran = $refran;
 
-    // Obtener lecciones con información completa
-    try {
-        $sql = "SELECT l.*, 
-                    u.titulo as unidad_titulo,
-                    c.nombre as curso_nombre,
-                    COUNT(DISTINCT pe.id) as total_estudiantes_progreso,
-                    AVG(pe.progreso) as progreso_promedio
-                FROM lecciones l
-                INNER JOIN unidades u ON l.unidad_id = u.id
-                INNER JOIN cursos c ON u.curso_id = c.id
-                LEFT JOIN progreso_estudiantes pe ON l.id = pe.leccion_id
-                GROUP BY l.id
-                ORDER BY u.orden ASC, l.orden ASC";
-        
-        $stmt_lecciones = $conexion->prepare($sql);
-        $stmt_lecciones->execute();
-        $lecciones = $stmt_lecciones->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-        $lecciones = [];
-        $error_lecciones = "Error al cargar lecciones: " . $e->getMessage();
-    }
-
-    // Obtener unidades para filtros y selección
-    try {
-        $sql_unidades = "SELECT u.*, c.nombre as curso_nombre 
-                        FROM unidades u
-                        INNER JOIN cursos c ON u.curso_id = c.id
-                        ORDER BY c.nombre ASC, u.orden ASC";
-        $stmt_unidades = $conexion->prepare($sql_unidades);
-        $stmt_unidades->execute();
-        $unidades = $stmt_unidades->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-        $unidades = [];
-    }
-
-    // Obtener cursos para filtros
-    try {
-        $stmt_cursos = $conexion->prepare("SELECT * FROM cursos ORDER BY nombre ASC");
-        $stmt_cursos->execute();
-        $cursos = $stmt_cursos->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-        $cursos = [];
-    }
-
-    // Calcular estadísticas
-    $total_lecciones = count($lecciones);
-    $lecciones_publicadas = count(array_filter($lecciones, function($l) { 
-        $config = json_decode($l['configuraciones'], true);
-        return isset($config['estado']) && $config['estado'] === 'PUBLICADO'; 
-    }));
-    $lecciones_borrador = $total_lecciones - $lecciones_publicadas;
+// ==========================================
+// OBTENER LECCIONES (FILTRADO POR ROL)
+// ==========================================
+try {
+    $sql = "SELECT l.*, 
+                u.titulo as unidad_titulo,
+                u.id as unidad_id,
+                c.nombre as curso_nombre,
+                c.id as curso_id,
+                ad.docente_id,
+                COUNT(DISTINCT pe.id) as total_estudiantes_progreso,
+                AVG(pe.progreso) as progreso_promedio
+            FROM lecciones l
+            INNER JOIN unidades u ON l.unidad_id = u.id
+            INNER JOIN cursos c ON u.curso_id = c.id
+            INNER JOIN asignaciones_docentes ad ON c.asignacion_id = ad.id
+            LEFT JOIN progreso_estudiantes pe ON l.id = pe.leccion_id";
     
-    // Estadísticas por tipo
-    $tipos_count = [
-        'CONTENIDO' => 0,
-        'ACTIVIDAD' => 0,
-        'EVALUACION' => 0
-    ];
-    foreach ($lecciones as $leccion) {
-        $tipos_count[$leccion['tipo']]++;
+    // FILTRO: Si es docente, solo sus lecciones
+    if ($es_docente && $docente_id) {
+        $sql .= " WHERE ad.docente_id = :docente_id";
     }
+    
+    $sql .= " GROUP BY l.id
+             ORDER BY u.orden ASC, l.orden ASC";
+    
+    $stmt_lecciones = $conexion->prepare($sql);
+    
+    if ($es_docente && $docente_id) {
+        $stmt_lecciones->bindParam(':docente_id', $docente_id, PDO::PARAM_INT);
+    }
+    
+    $stmt_lecciones->execute();
+    $lecciones = $stmt_lecciones->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $lecciones = [];
+    $error_lecciones = "Error al cargar lecciones: " . $e->getMessage();
+    error_log($error_lecciones);
+}
 
-    // Promedio general de progreso
-    $progreso_general = 0;
-    $count_progreso = 0;
-    foreach ($lecciones as $leccion) {
-        if ($leccion['progreso_promedio'] > 0) {
-            $progreso_general += $leccion['progreso_promedio'];
-            $count_progreso++;
-        }
+// ==========================================
+// OBTENER UNIDADES (FILTRADO POR ROL)
+// ==========================================
+try {
+    $sql_unidades = "SELECT u.*, 
+                         c.nombre as curso_nombre,
+                         ad.docente_id
+                     FROM unidades u
+                     INNER JOIN cursos c ON u.curso_id = c.id
+                     INNER JOIN asignaciones_docentes ad ON c.asignacion_id = ad.id";
+    
+    // FILTRO: Si es docente, solo sus unidades
+    if ($es_docente && $docente_id) {
+        $sql_unidades .= " WHERE ad.docente_id = :docente_id";
     }
-    $progreso_general = $count_progreso > 0 ? round($progreso_general / $count_progreso, 2) : 0;
+    
+    $sql_unidades .= " ORDER BY c.nombre ASC, u.orden ASC";
+    
+    $stmt_unidades = $conexion->prepare($sql_unidades);
+    
+    if ($es_docente && $docente_id) {
+        $stmt_unidades->bindParam(':docente_id', $docente_id, PDO::PARAM_INT);
+    }
+    
+    $stmt_unidades->execute();
+    $unidades = $stmt_unidades->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $unidades = [];
+    error_log("Error al cargar unidades: " . $e->getMessage());
+}
+
+// ==========================================
+// OBTENER CURSOS (FILTRADO POR ROL)
+// ==========================================
+try {
+    $sql_cursos = "SELECT c.*, ad.docente_id
+                   FROM cursos c
+                   INNER JOIN asignaciones_docentes ad ON c.asignacion_id = ad.id";
+    
+    // FILTRO: Si es docente, solo sus cursos
+    if ($es_docente && $docente_id) {
+        $sql_cursos .= " WHERE ad.docente_id = :docente_id";
+    }
+    
+    $sql_cursos .= " ORDER BY c.nombre ASC";
+    
+    $stmt_cursos = $conexion->prepare($sql_cursos);
+    
+    if ($es_docente && $docente_id) {
+        $stmt_cursos->bindParam(':docente_id', $docente_id, PDO::PARAM_INT);
+    }
+    
+    $stmt_cursos->execute();
+    $cursos = $stmt_cursos->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $cursos = [];
+    error_log("Error al cargar cursos: " . $e->getMessage());
+}
+
+// Calcular estadísticas
+$total_lecciones = count($lecciones);
+$lecciones_publicadas = count(array_filter($lecciones, function($l) { 
+    $config = json_decode($l['configuraciones'], true);
+    return isset($config['estado']) && $config['estado'] === 'PUBLICADO'; 
+}));
+$lecciones_borrador = $total_lecciones - $lecciones_publicadas;
+
+// Estadísticas por tipo
+$tipos_count = [
+    'CONTENIDO' => 0,
+    'ACTIVIDAD' => 0,
+    'EVALUACION' => 0
+];
+foreach ($lecciones as $leccion) {
+    $tipos_count[$leccion['tipo']]++;
+}
+
+// Promedio general de progreso
+$progreso_general = 0;
+$count_progreso = 0;
+foreach ($lecciones as $leccion) {
+    if ($leccion['progreso_promedio'] > 0) {
+        $progreso_general += $leccion['progreso_promedio'];
+        $count_progreso++;
+    }
+}
+$progreso_general = $count_progreso > 0 ? round($progreso_general / $count_progreso, 2) : 0;
 ?>
 
 <!doctype html>
@@ -111,7 +201,7 @@ $refran = $refran;
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Gestión de Lecciones - <?php echo $nombre; ?></title>
+    <title><?= $es_docente ? 'Mis Lecciones' : 'Gestión de Lecciones' ?> - <?php echo $nombre; ?></title>
     <?php
         $favicon = !empty($foto) ? htmlspecialchars($foto) : 'assets/favicons/favicon-32x32.png';
     ?>
@@ -278,32 +368,22 @@ $refran = $refran;
             <div class="container-fluid">
                 
                 <!-- Header -->
-                <header class="app-header">
-                    <nav class="navbar navbar-expand-lg navbar-light">
-                        <ul class="navbar-nav">
-                            <li class="nav-item d-block d-xl-none">
-                                <a class="nav-link sidebartoggler" id="headerCollapse" href="javascript:void(0)">
-                                    <i class="ti ti-menu-2"></i>
-                                </a>
-                            </li>
-                        </ul>
-                        <div class="navbar-collapse justify-content-end px-0" id="navbarNav">
-                            <ul class="navbar-nav flex-row ms-auto align-items-center justify-content-end">
-                                <li class="nav-item">
-                                    <span class="badge bg-primary fs-2 rounded-4 lh-sm">Sistema AAC</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </nav>
-                </header>
+                <?php include 'includes/header.php'; ?>
 
                 <!-- Page Title -->
                 <div class="row">
                     <div class="col-12">
                         <div class="d-flex align-items-center justify-content-between mb-4">
                             <div>
-                                <h4 class="fw-bold mb-0">Gestión de Lecciones</h4>
-                                <p class="mb-0 text-muted">Administra el contenido educativo de cada unidad</p>
+                                <h4 class="fw-bold mb-0">
+                                    <?= $es_docente ? 'Mis Lecciones' : 'Gestión de Lecciones' ?>
+                                </h4>
+                                <p class="mb-0 text-muted">
+                                    <?= $es_docente 
+                                        ? 'Administra el contenido educativo de tus unidades' 
+                                        : 'Administra el contenido educativo de cada unidad' 
+                                    ?>
+                                </p>
                             </div>
                             <div class="d-flex gap-2">
                                 <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAgregarLeccion">
@@ -323,7 +403,9 @@ $refran = $refran;
                                 <div class="d-flex align-items-center justify-content-between">
                                     <div>
                                         <h3 class="fw-bold mb-1"><?= $total_lecciones ?></h3>
-                                        <p class="mb-0 opacity-75">Total Lecciones</p>
+                                        <p class="mb-0 opacity-75">
+                                            <?= $es_docente ? 'Mis Lecciones' : 'Total Lecciones' ?>
+                                        </p>
                                     </div>
                                     <i class="ti ti-book stats-icon"></i>
                                 </div>
@@ -389,7 +471,9 @@ $refran = $refran;
                                 <select class="form-select" id="filtroUnidad">
                                     <option value="">Todas las unidades</option>
                                     <?php foreach ($unidades as $unidad): ?>
-                                        <option value="<?= $unidad['id'] ?>"><?= htmlspecialchars($unidad['titulo']) ?></option>
+                                        <option value="<?= $unidad['id'] ?>">
+                                            <?= htmlspecialchars($unidad['curso_nombre'] . ' - ' . $unidad['titulo']) ?>
+                                        </option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
@@ -422,103 +506,119 @@ $refran = $refran;
 
                 <!-- Lista de Lecciones -->
                 <div class="row" id="leccionesContainer">
-                    <?php foreach ($lecciones as $leccion): 
-                        $configuraciones = json_decode($leccion['configuraciones'], true) ?: [];
-                        $recursos = json_decode($leccion['recursos'], true) ?: [];
-                        $estado = $configuraciones['estado'] ?? 'BORRADOR';
-                        $tiempo_estimado = $configuraciones['tiempo_estimado'] ?? 0;
-                        $obligatorio = $configuraciones['obligatorio'] ?? false;
-                    ?>
-                        <div class="col-md-6 mb-4 leccion-item" 
-                             data-curso="<?= $leccion['curso_nombre'] ?>"
-                             data-unidad="<?= $leccion['unidad_id'] ?>"
-                             data-tipo="<?= $leccion['tipo'] ?>"
-                             data-estado="<?= $estado ?>">
-                            <div class="card leccion-card tipo-<?= strtolower($leccion['tipo']) ?> h-100">
-                                <div class="card-body">
-                                    <div class="d-flex align-items-start gap-3">
-                                        <div class="orden-badge bg-light text-primary">
-                                            <?= str_pad($leccion['orden'], 2, '0', STR_PAD_LEFT) ?>
-                                        </div>
-                                        <div class="flex-grow-1">
-                                            <div class="d-flex justify-content-between align-items-start mb-2">
-                                                <div>
-                                                    <h5 class="leccion-titulo mb-1"><?= htmlspecialchars($leccion['titulo']) ?></h5>
-                                                    <div class="unidad-info">
-                                                        <i class="ti ti-folder me-1"></i>
-                                                        <?= htmlspecialchars($leccion['curso_nombre']) ?> › <?= htmlspecialchars($leccion['unidad_titulo']) ?>
+                    <?php if (empty($lecciones)): ?>
+                        <div class="col-12">
+                            <div class="alert alert-info text-center">
+                                <i class="ti ti-info-circle me-2"></i>
+                                <?= $es_docente 
+                                    ? 'No tienes lecciones creadas. Crea una lección para comenzar a agregar contenido educativo.' 
+                                    : 'No hay lecciones registradas en el sistema.' 
+                                ?>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <?php foreach ($lecciones as $leccion): 
+                            $configuraciones = json_decode($leccion['configuraciones'], true) ?: [];
+                            $recursos = json_decode($leccion['recursos'], true) ?: [];
+                            $estado = $configuraciones['estado'] ?? 'BORRADOR';
+                            $tiempo_estimado = $configuraciones['tiempo_estimado'] ?? 0;
+                            $obligatorio = $configuraciones['obligatorio'] ?? false;
+                        ?>
+                            <div class="col-md-6 mb-4 leccion-item" 
+                                 data-curso="<?= $leccion['curso_id'] ?>"
+                                 data-unidad="<?= $leccion['unidad_id'] ?>"
+                                 data-tipo="<?= $leccion['tipo'] ?>"
+                                 data-estado="<?= $estado ?>">
+                                <div class="card leccion-card tipo-<?= strtolower($leccion['tipo']) ?> h-100">
+                                    <div class="card-body">
+                                        <div class="d-flex align-items-start gap-3">
+                                            <div class="orden-badge bg-light text-primary">
+                                                <?= str_pad($leccion['orden'], 2, '0', STR_PAD_LEFT) ?>
+                                            </div>
+                                            <div class="flex-grow-1">
+                                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                                    <div>
+                                                        <h5 class="leccion-titulo mb-1"><?= htmlspecialchars($leccion['titulo']) ?></h5>
+                                                        <div class="unidad-info">
+                                                            <i class="ti ti-folder me-1"></i>
+                                                            <?= htmlspecialchars($leccion['curso_nombre']) ?> › <?= htmlspecialchars($leccion['unidad_titulo']) ?>
+                                                        </div>
+                                                    </div>
+                                                    <div class="text-end">
+                                                        <span class="tipo-badge badge <?php
+                                                            switch($leccion['tipo']) {
+                                                                case 'CONTENIDO': echo 'bg-primary'; break;
+                                                                case 'ACTIVIDAD': echo 'bg-success'; break;
+                                                                case 'EVALUACION': echo 'bg-danger'; break;
+                                                            }
+                                                        ?>"><?= $leccion['tipo'] ?></span>
+                                                        <?php if ($obligatorio): ?>
+                                                            <br><span class="badge obligatorio-badge mt-1">OBLIGATORIO</span>
+                                                        <?php endif; ?>
                                                     </div>
                                                 </div>
-                                                <div class="text-end">
-                                                    <span class="tipo-badge badge <?php
-                                                        switch($leccion['tipo']) {
-                                                            case 'CONTENIDO': echo 'bg-primary'; break;
-                                                            case 'ACTIVIDAD': echo 'bg-success'; break;
-                                                            case 'EVALUACION': echo 'bg-danger'; break;
-                                                        }
-                                                    ?>"><?= $leccion['tipo'] ?></span>
-                                                    <?php if ($obligatorio): ?>
-                                                        <br><span class="badge obligatorio-badge mt-1">OBLIGATORIO</span>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </div>
 
-                                            <?php if (!empty($leccion['descripcion'])): ?>
-                                                <p class="content-preview mb-2"><?= htmlspecialchars(substr($leccion['descripcion'], 0, 100)) ?>...</p>
-                                            <?php endif; ?>
+                                                <?php if (!empty($leccion['descripcion'])): ?>
+                                                    <p class="content-preview mb-2"><?= htmlspecialchars(substr($leccion['descripcion'], 0, 100)) ?>...</p>
+                                                <?php endif; ?>
 
-                                            <div class="d-flex gap-3 mb-3">
-                                                <div class="tiempo-estimado">
-                                                    <i class="ti ti-clock me-1"></i><?= $tiempo_estimado ?> min
+                                                <div class="d-flex gap-3 mb-3">
+                                                    <div class="tiempo-estimado">
+                                                        <i class="ti ti-clock me-1"></i><?= $tiempo_estimado ?> min
+                                                    </div>
+                                                    <div class="recursos-count">
+                                                        <i class="ti ti-paperclip me-1"></i><?= count($recursos) ?> recursos
+                                                    </div>
+                                                    <div class="text-muted" style="font-size: 0.75rem;">
+                                                        <i class="ti ti-users me-1"></i><?= $leccion['total_estudiantes_progreso'] ?> estudiantes
+                                                    </div>
                                                 </div>
-                                                <div class="recursos-count">
-                                                    <i class="ti ti-paperclip me-1"></i><?= count($recursos) ?> recursos
-                                                </div>
-                                                <div class="text-muted" style="font-size: 0.75rem;">
-                                                    <i class="ti ti-users me-1"></i><?= $leccion['total_estudiantes_progreso'] ?> estudiantes
-                                                </div>
-                                            </div>
 
-                                            <div class="mb-3">
-                                                <div class="d-flex justify-content-between align-items-center mb-1">
-                                                    <small class="text-muted">Progreso promedio</small>
-                                                    <small class="fw-bold">
-                                                        <?= is_numeric($leccion['progreso_promedio']) ? round($leccion['progreso_promedio'], 1) : '0' ?>%
-                                                    </small>                                               
+                                                <div class="mb-3">
+                                                    <div class="d-flex justify-content-between align-items-center mb-1">
+                                                        <small class="text-muted">Progreso promedio</small>
+                                                        <small class="fw-bold">
+                                                            <?= is_numeric($leccion['progreso_promedio']) ? round($leccion['progreso_promedio'], 1) : '0' ?>%
+                                                        </small>                                               
+                                                    </div>
+                                                    <div class="progreso-wrapper">
+                                                        <div class="progreso-bar" style="width: <?= $leccion['progreso_promedio'] ?>%"></div>
+                                                    </div>
                                                 </div>
-                                                <div class="progreso-wrapper">
-                                                    <div class="progreso-bar" style="width: <?= $leccion['progreso_promedio'] ?>%"></div>
-                                                </div>
-                                            </div>
 
-                                            <div class="d-flex justify-content-between align-items-center">
-                                                <span class="estado-badge badge <?= $estado === 'PUBLICADO' ? 'bg-success' : 'bg-warning text-dark' ?>">
-                                                    <?= $estado ?>
-                                                </span>
-                                                <div class="table-actions">
-                                                    <button type="button" class="btn btn-sm btn-outline-primary" 
-                                                            onclick="editarLeccion(<?= $leccion['id'] ?>)" title="Editar">
-                                                        <i class="ti ti-edit"></i>
-                                                    </button>
-                                                    <button type="button" class="btn btn-sm btn-outline-info" 
-                                                            onclick="verContenido(<?= $leccion['id'] ?>)" title="Ver Contenido">
-                                                        <i class="ti ti-eye"></i>
-                                                    </button>
-                                                    <button type="button" class="btn btn-sm btn-outline-danger" 
-                                                            onclick="eliminarLeccion(<?= $leccion['id'] ?>)" title="Eliminar">
-                                                        <i class="ti ti-trash"></i>
-                                                    </button>
+                                                <div class="d-flex justify-content-between align-items-center">
+                                                    <span class="estado-badge badge <?= $estado === 'PUBLICADO' ? 'bg-success' : 'bg-warning text-dark' ?>">
+                                                        <?= $estado ?>
+                                                    </span>
+                                                    <div class="table-actions">
+                                                        <button type="button" class="btn btn-sm btn-outline-primary" 
+                                                                onclick="editarLeccion(<?= $leccion['id'] ?>)" title="Editar">
+                                                            <i class="ti ti-edit"></i>
+                                                        </button>
+                                                        <button type="button" class="btn btn-sm btn-outline-info" 
+                                                                onclick="verContenido(<?= $leccion['id'] ?>)" title="Ver Contenido">
+                                                            <i class="ti ti-eye"></i>
+                                                        </button>
+                                                        <?php if (!$es_docente): ?>
+                                                        <!-- Solo admin puede eliminar -->
+                                                        <button type="button" class="btn btn-sm btn-outline-danger" 
+                                                                onclick="eliminarLeccion(<?= $leccion['id'] ?>)" title="Eliminar">
+                                                            <i class="ti ti-trash"></i>
+                                                        </button>
+                                                        <?php endif; ?>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </div>
 
                 <!-- Distribución por Tipo -->
+                <?php if ($total_lecciones > 0): ?>
                 <div class="row mt-4">
                     <div class="col-12">
                         <div class="card">
@@ -548,6 +648,7 @@ $refran = $refran;
                         </div>
                     </div>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -574,6 +675,7 @@ $refran = $refran;
 
     <script>
         const unidadesData = <?= json_encode($unidades) ?>;
+        const esDocente = <?= $es_docente ? 'true' : 'false' ?>;
 
         $(document).ready(function() {
             // Filtros en tiempo real
@@ -588,14 +690,14 @@ $refran = $refran;
 
             $('.leccion-item').each(function() {
                 const item = $(this);
-                const curso = item.data('curso');
+                const curso = item.data('curso').toString();
                 const unidad = item.data('unidad').toString();
                 const tipo = item.data('tipo');
                 const estado = item.data('estado');
 
                 let mostrar = true;
 
-                if (cursoFiltro && !curso.includes(cursoFiltro)) mostrar = false;
+                if (cursoFiltro && curso !== cursoFiltro) mostrar = false;
                 if (unidadFiltro && unidad !== unidadFiltro) mostrar = false;
                 if (tipoFiltro && tipo !== tipoFiltro) mostrar = false;
                 if (estadoFiltro && estado !== estadoFiltro) mostrar = false;
@@ -672,6 +774,7 @@ $refran = $refran;
             $('#contenidoHTML').html(leccion.contenido || '<p class="text-muted">Sin contenido</p>');
         }
 
+        <?php if (!$es_docente): ?>
         function eliminarLeccion(id) {
             Swal.fire({
                 title: '¿Estás seguro?',
@@ -712,6 +815,7 @@ $refran = $refran;
                 mostrarError('Error al eliminar lección');
             });
         }
+        <?php endif; ?>
 
         function mostrarExito(mensaje) {
             Swal.fire({

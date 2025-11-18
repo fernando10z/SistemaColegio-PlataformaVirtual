@@ -3,105 +3,178 @@ session_start();
 
 // Redirigir al index si no hay sesión iniciada
 if (session_status() !== PHP_SESSION_ACTIVE
-  || (!isset($_SESSION['usuario_id']) && !isset($_SESSION['usuario_id']) && empty($_SESSION['login_time']))) {
+  || (!isset($_SESSION['usuario_id']) && empty($_SESSION['login_time']))) {
   header('Location: ../index.php');
   exit;
 }
-    require_once 'conexion/bd.php';
 
-                                    try {
+require_once 'conexion/bd.php';
+
+// ==========================================
+// OBTENER ROL Y DATOS DEL USUARIO EN SESIÓN
+// ==========================================
+$usuario_id = $_SESSION['usuario_id'];
+$rol_usuario = null;
+$docente_id = null;
+$es_docente = false;
+
+try {
+    // Obtener rol del usuario
+    $stmt_rol = $conexion->prepare("SELECT rol_id FROM usuarios WHERE id = ? LIMIT 1");
+    $stmt_rol->execute([$usuario_id]);
+    $usuario_data = $stmt_rol->fetch(PDO::FETCH_ASSOC);
+    
+    if ($usuario_data) {
+        $rol_usuario = intval($usuario_data['rol_id']);
+        $es_docente = ($rol_usuario === 4); // Rol 4 = Docente
+        
+        // Si es docente, obtener su docente_id
+        if ($es_docente) {
+            $stmt_docente = $conexion->prepare("SELECT id FROM docentes WHERE usuario_id = ? AND activo = 1 LIMIT 1");
+            $stmt_docente->execute([$usuario_id]);
+            $docente_data = $stmt_docente->fetch(PDO::FETCH_ASSOC);
+            
+            if ($docente_data) {
+                $docente_id = intval($docente_data['id']);
+            } else {
+                die('Error: No se encontró registro de docente asociado a su usuario.');
+            }
+        }
+    }
+} catch (PDOException $e) {
+    error_log("Error obteniendo datos de usuario: " . $e->getMessage());
+    die('Error al verificar permisos de usuario.');
+}
+
+// Obtener datos del colegio
+try {
     $stmt_cp = $conexion->prepare("SELECT nombre, ruc, foto, direccion, refran FROM colegio_principal WHERE id = 1 LIMIT 1");
     $stmt_cp->execute();
     $colegio = $stmt_cp->fetch(PDO::FETCH_ASSOC);
     if ($colegio) {
-        $colegio_nombre = isset($colegio['nombre']) ? $colegio['nombre'] : '';
-        $colegio_ruc    = isset($colegio['ruc']) ? $colegio['ruc'] : '';
-        $colegio_foto   = isset($colegio['foto']) ? $colegio['foto'] : '';
-        $colegio_direccion = isset($colegio['direccion']) ? $colegio['direccion'] : '';
-        $refran = isset($colegio['refran']) ? $colegio['refran'] : '';
+        $colegio_nombre = $colegio['nombre'] ?? '';
+        $colegio_ruc = $colegio['ruc'] ?? '';
+        $colegio_foto = $colegio['foto'] ?? '';
+        $colegio_direccion = $colegio['direccion'] ?? '';
+        $refran = $colegio['refran'] ?? '';
     }
 } catch (PDOException $e) {
     error_log("Error fetching colegio_principal: " . $e->getMessage());
 }
 
-// Variables solicitadas (nombre, ruc, foto)
 $nombre = $colegio_nombre;
-$ruc    = $colegio_ruc;
-$foto   = $colegio_foto;
+$ruc = $colegio_ruc;
+$foto = $colegio_foto;
 $direccion = $colegio_direccion;
-$refran = $refran;
 
-    // Obtener recursos con información completa
-    try {
-        $sql = "SELECT r.*, 
-                    u.username as usuario_nombre,
-                    COUNT(DISTINCT cr.curso_id) as cursos_vinculados,
-                    COUNT(DISTINCT lr.leccion_id) as lecciones_vinculadas
-                FROM recursos r
-                LEFT JOIN usuarios u ON r.usuario_creacion = u.id
-                LEFT JOIN curso_recursos cr ON r.id = cr.recurso_id
-                LEFT JOIN leccion_recursos lr ON r.id = lr.recurso_id
-                GROUP BY r.id
-                ORDER BY r.activo DESC, r.fecha_creacion DESC";
-        
-        $stmt_recursos = $conexion->prepare($sql);
-        $stmt_recursos->execute();
-        $recursos = $stmt_recursos->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-        $recursos = [];
-        $error_recursos = "Error al cargar recursos: " . $e->getMessage();
-    }
-
-    // Obtener cursos para filtros y vinculación
-    try {
-        $stmt_cursos = $conexion->prepare("
-            SELECT c.id, c.nombre, c.codigo_curso, 
-                   s.grado, s.seccion, ac.nombre as area_nombre
-            FROM cursos c
-            INNER JOIN asignaciones_docentes ad ON c.asignacion_id = ad.id
-            INNER JOIN secciones s ON ad.seccion_id = s.id
-            INNER JOIN areas_curriculares ac ON ad.area_id = ac.id
-            ORDER BY s.grado ASC, s.seccion ASC, ac.nombre ASC
-        ");
-        $stmt_cursos->execute();
-        $cursos_disponibles = $stmt_cursos->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-        $cursos_disponibles = [];
-    }
-
-    // Calcular estadísticas
-    $total_recursos = count($recursos);
-    $recursos_activos = count(array_filter($recursos, function($r) { return $r['activo']; }));
-    $recursos_inactivos = $total_recursos - $recursos_activos;
+// ==========================================
+// OBTENER RECURSOS (FILTRADO POR ROL)
+// ==========================================
+try {
+    $sql = "SELECT DISTINCT r.*, 
+                u.username as usuario_nombre,
+                COUNT(DISTINCT cr.curso_id) as cursos_vinculados,
+                COUNT(DISTINCT lr.leccion_id) as lecciones_vinculadas
+            FROM recursos r
+            LEFT JOIN usuarios u ON r.usuario_creacion = u.id
+            LEFT JOIN curso_recursos cr ON r.id = cr.recurso_id
+            LEFT JOIN leccion_recursos lr ON r.id = lr.recurso_id";
     
-    // Estadísticas por tipo
-    $tipos_count = [
-        'VIDEO' => 0,
-        'PDF' => 0,
-        'IMAGEN' => 0,
-        'AUDIO' => 0,
-        'ENLACE' => 0,
-        'DOCUMENTO' => 0,
-        'PRESENTACION' => 0,
-        'OTRO' => 0
-    ];
+    // FILTRO: Si es docente, solo recursos vinculados a sus cursos
+    if ($es_docente && $docente_id) {
+        $sql .= " LEFT JOIN cursos c ON (cr.curso_id = c.id OR lr.leccion_id IN (
+                      SELECT l.id FROM lecciones l 
+                      INNER JOIN unidades u ON l.unidad_id = u.id 
+                      WHERE u.curso_id = c.id
+                  ))
+                  LEFT JOIN asignaciones_docentes ad ON c.asignacion_id = ad.id
+                  WHERE ad.docente_id = :docente_id 
+                  OR r.publico = 1"; // También puede ver recursos públicos
+    }
     
-    foreach ($recursos as $recurso) {
-        $tipo = $recurso['tipo'] ?? 'OTRO';
-        if (isset($tipos_count[$tipo])) {
-            $tipos_count[$tipo]++;
-        } else {
-            $tipos_count['OTRO']++;
-        }
+    $sql .= " GROUP BY r.id
+             ORDER BY r.activo DESC, r.fecha_creacion DESC";
+    
+    $stmt_recursos = $conexion->prepare($sql);
+    
+    if ($es_docente && $docente_id) {
+        $stmt_recursos->bindParam(':docente_id', $docente_id, PDO::PARAM_INT);
     }
+    
+    $stmt_recursos->execute();
+    $recursos = $stmt_recursos->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $recursos = [];
+    $error_recursos = "Error al cargar recursos: " . $e->getMessage();
+    error_log($error_recursos);
+}
 
-    // Calcular tamaño total
-    $tamano_total = 0;
-    foreach ($recursos as $recurso) {
-        $metadata = json_decode($recurso['metadata'], true);
-        $tamano_total += $metadata['tamano_bytes'] ?? 0;
+// ==========================================
+// OBTENER CURSOS (FILTRADO POR ROL)
+// ==========================================
+try {
+    $sql_cursos = "SELECT c.id, c.nombre, c.codigo_curso, 
+                       s.grado, s.seccion, 
+                       ac.nombre as area_nombre,
+                       ad.docente_id
+                   FROM cursos c
+                   INNER JOIN asignaciones_docentes ad ON c.asignacion_id = ad.id
+                   INNER JOIN secciones s ON ad.seccion_id = s.id
+                   INNER JOIN areas_curriculares ac ON ad.area_id = ac.id";
+    
+    // FILTRO: Si es docente, solo sus cursos
+    if ($es_docente && $docente_id) {
+        $sql_cursos .= " WHERE ad.docente_id = :docente_id";
     }
-    $tamano_total_mb = round($tamano_total / 1048576, 2);
+    
+    $sql_cursos .= " ORDER BY s.grado ASC, s.seccion ASC, ac.nombre ASC";
+    
+    $stmt_cursos = $conexion->prepare($sql_cursos);
+    
+    if ($es_docente && $docente_id) {
+        $stmt_cursos->bindParam(':docente_id', $docente_id, PDO::PARAM_INT);
+    }
+    
+    $stmt_cursos->execute();
+    $cursos_disponibles = $stmt_cursos->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $cursos_disponibles = [];
+    error_log("Error al cargar cursos: " . $e->getMessage());
+}
+
+// Calcular estadísticas
+$total_recursos = count($recursos);
+$recursos_activos = count(array_filter($recursos, function($r) { return $r['activo']; }));
+$recursos_inactivos = $total_recursos - $recursos_activos;
+
+// Estadísticas por tipo
+$tipos_count = [
+    'VIDEO' => 0,
+    'PDF' => 0,
+    'IMAGEN' => 0,
+    'AUDIO' => 0,
+    'ENLACE' => 0,
+    'DOCUMENTO' => 0,
+    'PRESENTACION' => 0,
+    'OTRO' => 0
+];
+
+foreach ($recursos as $recurso) {
+    $tipo = $recurso['tipo'] ?? 'OTRO';
+    if (isset($tipos_count[$tipo])) {
+        $tipos_count[$tipo]++;
+    } else {
+        $tipos_count['OTRO']++;
+    }
+}
+
+// Calcular tamaño total
+$tamano_total = 0;
+foreach ($recursos as $recurso) {
+    $metadata = json_decode($recurso['metadata'], true);
+    $tamano_total += $metadata['tamano_bytes'] ?? 0;
+}
+$tamano_total_mb = round($tamano_total / 1048576, 2);
 ?>
 
 <!doctype html>
@@ -109,7 +182,7 @@ $refran = $refran;
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Gestión de Recursos - <?php echo $nombre; ?></title>
+    <title><?= $es_docente ? 'Mis Recursos' : 'Gestión de Recursos' ?> - <?php echo $nombre; ?></title>
     <?php
         $favicon = !empty($foto) ? htmlspecialchars($foto) : 'assets/favicons/favicon-32x32.png';
     ?>
@@ -273,32 +346,22 @@ $refran = $refran;
         <div class="body-wrapper" style="top: 20px;">
             <div class="container-fluid">
                 
-                <header class="app-header">
-                    <nav class="navbar navbar-expand-lg navbar-light">
-                        <ul class="navbar-nav">
-                            <li class="nav-item d-block d-xl-none">
-                                <a class="nav-link sidebartoggler" id="headerCollapse" href="javascript:void(0)">
-                                    <i class="ti ti-menu-2"></i>
-                                </a>
-                            </li>
-                        </ul>
-                        <div class="navbar-collapse justify-content-end px-0" id="navbarNav">
-                            <ul class="navbar-nav flex-row ms-auto align-items-center justify-content-end">
-                                <li class="nav-item">
-                                    <span class="badge bg-primary fs-2 rounded-4 lh-sm">Sistema AAC</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </nav>
-                </header>
+            <?php include 'includes/header.php'; ?>
 
                 <!-- Page Title -->
                 <div class="row">
                     <div class="col-12">
                         <div class="d-flex align-items-center justify-content-between mb-4">
                             <div>
-                                <h4 class="fw-bold mb-0">Gestión de Recursos</h4>
-                                <p class="mb-0 text-muted">Administra archivos, videos, enlaces y materiales de apoyo</p>
+                                <h4 class="fw-bold mb-0">
+                                    <?= $es_docente ? 'Mis Recursos Educativos' : 'Gestión de Recursos' ?>
+                                </h4>
+                                <p class="mb-0 text-muted">
+                                    <?= $es_docente 
+                                        ? 'Administra tus archivos, videos, enlaces y materiales de apoyo' 
+                                        : 'Administra archivos, videos, enlaces y materiales de apoyo' 
+                                    ?>
+                                </p>
                             </div>
                             <div class="d-flex gap-2">
                                 <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAgregarRecurso">
@@ -320,7 +383,9 @@ $refran = $refran;
                                         <i class="ti ti-file"></i>
                                     </div>
                                     <div>
-                                        <h6 class="mb-0 text-white">Total Recursos</h6>
+                                        <h6 class="mb-0 text-white">
+                                            <?= $es_docente ? 'Mis Recursos' : 'Total Recursos' ?>
+                                        </h6>
                                         <h3 class="mb-0 text-white fw-bold"><?= $total_recursos ?></h3>
                                     </div>
                                 </div>
@@ -427,121 +492,135 @@ $refran = $refran;
                         <h5 class="mb-0">Lista de Recursos</h5>
                     </div>
                     <div class="card-body">
-                        <div class="table-responsive">
-                            <table class="table table-hover" id="tablaRecursos">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Recurso</th>
-                                        <th>Tipo</th>
-                                        <th>Información</th>
-                                        <th>Vinculaciones</th>
-                                        <th>Estado</th>
-                                        <th>Acciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($recursos as $recurso): 
-                                        $metadata = json_decode($recurso['metadata'], true) ?: [];
-                                        $tipo_icono = [
-                                            'VIDEO' => 'ti-video',
-                                            'PDF' => 'ti-file-text',
-                                            'IMAGEN' => 'ti-photo',
-                                            'AUDIO' => 'ti-music',
-                                            'ENLACE' => 'ti-link',
-                                            'DOCUMENTO' => 'ti-file-description',
-                                            'PRESENTACION' => 'ti-presentation',
-                                            'OTRO' => 'ti-file'
-                                        ];
-                                        $icono = $tipo_icono[$recurso['tipo']] ?? 'ti-file';
-                                    ?>
-                                        <tr data-tipo="<?= $recurso['tipo'] ?>" 
-                                            data-estado="<?= $recurso['activo'] ?>">
-                                            <td>
-                                                <div class="d-flex align-items-center">
-                                                    <i class="ti <?= $icono ?> file-icon text-primary"></i>
-                                                    <div class="recurso-info">
-                                                        <div class="recurso-titulo">
-                                                            <?= htmlspecialchars($recurso['titulo']) ?>
-                                                        </div>
-                                                        <div class="recurso-tipo">
-                                                            <?= htmlspecialchars($recurso['descripcion'] ?: 'Sin descripción') ?>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span class="badge tipo-badge bg-primary">
-                                                    <?= $recurso['tipo'] ?>
-                                                </span>
-                                                <?php if ($recurso['publico']): ?>
-                                                    <br><span class="badge tipo-badge bg-success mt-1">Público</span>
-                                                <?php else: ?>
-                                                    <br><span class="badge tipo-badge bg-secondary mt-1">Privado</span>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <div class="metadata-info">
-                                                    <?php if (!empty($metadata['tamano_bytes'])): ?>
-                                                        <div>
-                                                            <i class="ti ti-database"></i>
-                                                            <?= round($metadata['tamano_bytes'] / 1048576, 2) ?> MB
-                                                        </div>
-                                                    <?php endif; ?>
-                                                    <?php if (!empty($metadata['duracion'])): ?>
-                                                        <div>
-                                                            <i class="ti ti-clock"></i>
-                                                            <?= $metadata['duracion'] ?>
-                                                        </div>
-                                                    <?php endif; ?>
-                                                    <div class="text-muted mt-1">
-                                                        <small>Por: <?= htmlspecialchars($recurso['usuario_nombre']) ?></small>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <div class="vinculacion-info">
-                                                    <div class="vinculacion-numero">
-                                                        <?= $recurso['cursos_vinculados'] + $recurso['lecciones_vinculadas'] ?>
-                                                    </div>
-                                                    <small class="text-muted">
-                                                        <?= $recurso['cursos_vinculados'] ?> cursos, 
-                                                        <?= $recurso['lecciones_vinculadas'] ?> lecciones
-                                                    </small>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span class="badge <?= $recurso['activo'] ? 'bg-success' : 'bg-danger' ?>">
-                                                    <?= $recurso['activo'] ? 'Activo' : 'Inactivo' ?>
-                                                </span>
-                                            </td>
-                                            <td class="table-actions">
-                                                <div class="d-flex gap-1 flex-wrap">
-                                                    <button type="button" class="btn btn-sm btn-outline-primary" 
-                                                            onclick="editarRecurso(<?= $recurso['id'] ?>)" 
-                                                            title="Editar">
-                                                        <i class="ti ti-edit"></i>
-                                                    </button>
-                                                    <button type="button" class="btn btn-sm btn-outline-info" 
-                                                            onclick="verRecurso('<?= htmlspecialchars($recurso['url']) ?>', '<?= $recurso['tipo'] ?>')" 
-                                                            title="Ver/Descargar">
-                                                        <i class="ti ti-eye"></i>
-                                                    </button>
-                                                    <button type="button" class="btn btn-sm <?= $recurso['activo'] ? 'btn-outline-warning' : 'btn-outline-success' ?>" 
-                                                            onclick="toggleEstadoRecurso(<?= $recurso['id'] ?>, <?= $recurso['activo'] ? 'false' : 'true' ?>)" 
-                                                            title="<?= $recurso['activo'] ? 'Desactivar' : 'Activar' ?>">
-                                                        <i class="ti <?= $recurso['activo'] ? 'ti-toggle-right' : 'ti-toggle-left' ?>"></i>
-                                                    </button>
-                                                </div>
-                                            </td>
+                        <?php if (empty($recursos)): ?>
+                            <div class="alert alert-info text-center">
+                                <i class="ti ti-info-circle me-2"></i>
+                                <?= $es_docente 
+                                    ? 'No tienes recursos creados. Agrega materiales educativos para usar en tus cursos.' 
+                                    : 'No hay recursos registrados en el sistema.' 
+                                ?>
+                            </div>
+                        <?php else: ?>
+                            <div class="table-responsive">
+                                <table class="table table-hover" id="tablaRecursos">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Recurso</th>
+                                            <th>Tipo</th>
+                                            <th>Información</th>
+                                            <th>Vinculaciones</th>
+                                            <th>Estado</th>
+                                            <th>Acciones</th>
                                         </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($recursos as $recurso): 
+                                            $metadata = json_decode($recurso['metadata'], true) ?: [];
+                                            $tipo_icono = [
+                                                'VIDEO' => 'ti-video',
+                                                'PDF' => 'ti-file-text',
+                                                'IMAGEN' => 'ti-photo',
+                                                'AUDIO' => 'ti-music',
+                                                'ENLACE' => 'ti-link',
+                                                'DOCUMENTO' => 'ti-file-description',
+                                                'PRESENTACION' => 'ti-presentation',
+                                                'OTRO' => 'ti-file'
+                                            ];
+                                            $icono = $tipo_icono[$recurso['tipo']] ?? 'ti-file';
+                                        ?>
+                                            <tr data-tipo="<?= $recurso['tipo'] ?>" 
+                                                data-estado="<?= $recurso['activo'] ?>">
+                                                <td>
+                                                    <div class="d-flex align-items-center">
+                                                        <i class="ti <?= $icono ?> file-icon text-primary"></i>
+                                                        <div class="recurso-info">
+                                                            <div class="recurso-titulo">
+                                                                <?= htmlspecialchars($recurso['titulo']) ?>
+                                                            </div>
+                                                            <div class="recurso-tipo">
+                                                                <?= htmlspecialchars($recurso['descripcion'] ?: 'Sin descripción') ?>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="badge tipo-badge bg-primary">
+                                                        <?= $recurso['tipo'] ?>
+                                                    </span>
+                                                    <?php if ($recurso['publico']): ?>
+                                                        <br><span class="badge tipo-badge bg-success mt-1">Público</span>
+                                                    <?php else: ?>
+                                                        <br><span class="badge tipo-badge bg-secondary mt-1">Privado</span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <div class="metadata-info">
+                                                        <?php if (!empty($metadata['tamano_bytes'])): ?>
+                                                            <div>
+                                                                <i class="ti ti-database"></i>
+                                                                <?= round($metadata['tamano_bytes'] / 1048576, 2) ?> MB
+                                                            </div>
+                                                        <?php endif; ?>
+                                                        <?php if (!empty($metadata['duracion'])): ?>
+                                                            <div>
+                                                                <i class="ti ti-clock"></i>
+                                                                <?= $metadata['duracion'] ?>
+                                                            </div>
+                                                        <?php endif; ?>
+                                                        <div class="text-muted mt-1">
+                                                            <small>Por: <?= htmlspecialchars($recurso['usuario_nombre']) ?></small>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <div class="vinculacion-info">
+                                                        <div class="vinculacion-numero">
+                                                            <?= $recurso['cursos_vinculados'] + $recurso['lecciones_vinculadas'] ?>
+                                                        </div>
+                                                        <small class="text-muted">
+                                                            <?= $recurso['cursos_vinculados'] ?> cursos, 
+                                                            <?= $recurso['lecciones_vinculadas'] ?> lecciones
+                                                        </small>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="badge <?= $recurso['activo'] ? 'bg-success' : 'bg-danger' ?>">
+                                                        <?= $recurso['activo'] ? 'Activo' : 'Inactivo' ?>
+                                                    </span>
+                                                </td>
+                                                <td class="table-actions">
+                                                    <div class="d-flex gap-1 flex-wrap">
+                                                        <button type="button" class="btn btn-sm btn-outline-primary" 
+                                                                onclick="editarRecurso(<?= $recurso['id'] ?>)" 
+                                                                title="Editar">
+                                                            <i class="ti ti-edit"></i>
+                                                        </button>
+                                                        <button type="button" class="btn btn-sm btn-outline-info" 
+                                                                onclick="verRecurso('<?= htmlspecialchars($recurso['url']) ?>', '<?= $recurso['tipo'] ?>')" 
+                                                                title="Ver/Descargar">
+                                                            <i class="ti ti-eye"></i>
+                                                        </button>
+                                                        <?php if (!$es_docente): ?>
+                                                        <!-- Solo admin puede cambiar estado -->
+                                                        <button type="button" class="btn btn-sm <?= $recurso['activo'] ? 'btn-outline-warning' : 'btn-outline-success' ?>" 
+                                                                onclick="toggleEstadoRecurso(<?= $recurso['id'] ?>, <?= $recurso['activo'] ? 'false' : 'true' ?>)" 
+                                                                title="<?= $recurso['activo'] ? 'Desactivar' : 'Activar' ?>">
+                                                            <i class="ti <?= $recurso['activo'] ? 'ti-toggle-right' : 'ti-toggle-left' ?>"></i>
+                                                        </button>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
 
                 <!-- Distribución por Tipo -->
+                <?php if ($total_recursos > 0): ?>
                 <div class="row mt-4">
                     <div class="col-md-12">
                         <div class="card">
@@ -551,6 +630,7 @@ $refran = $refran;
                             <div class="card-body">
                                 <div class="row">
                                     <?php foreach ($tipos_count as $tipo => $count): ?>
+                                        <?php if ($count > 0): ?>
                                         <div class="col-md-3 mb-3">
                                             <div class="d-flex justify-content-between align-items-center">
                                                 <span><?= $tipo ?></span>
@@ -562,12 +642,14 @@ $refran = $refran;
                                                 </div>
                                             </div>
                                         </div>
+                                        <?php endif; ?>
                                     <?php endforeach; ?>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+                <?php endif; ?>
             </div>
         </div>
     </div>
@@ -592,8 +674,10 @@ $refran = $refran;
 
     <script>
         let tablaRecursos;
+        const esDocente = <?= $es_docente ? 'true' : 'false' ?>;
 
         $(document).ready(function() {
+            <?php if (!empty($recursos)): ?>
             tablaRecursos = $('#tablaRecursos').DataTable({
                 language: {
                     url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/es-ES.json'
@@ -604,6 +688,7 @@ $refran = $refran;
                     { orderable: false, targets: [5] }
                 ]
             });
+            <?php endif; ?>
 
             $('#filtroTipo, #filtroEstado, #filtroCurso').on('change', aplicarFiltros);
             $('#buscarRecurso').on('keyup', aplicarFiltros);
@@ -679,6 +764,7 @@ $refran = $refran;
             }
         }
 
+        <?php if (!$es_docente): ?>
         function toggleEstadoRecurso(id, nuevoEstado) {
             const accion = nuevoEstado === 'true' ? 'activar' : 'desactivar';
             const mensaje = nuevoEstado === 'true' ? '¿activar' : '¿desactivar';
@@ -723,6 +809,7 @@ $refran = $refran;
                 mostrarError('Error al cambiar estado del recurso');
             });
         }
+        <?php endif; ?>
 
         function mostrarExito(mensaje) {
             Swal.fire({

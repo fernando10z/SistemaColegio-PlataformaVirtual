@@ -3,82 +3,154 @@ session_start();
 
 // Redirigir al index si no hay sesión iniciada
 if (session_status() !== PHP_SESSION_ACTIVE
-  || (!isset($_SESSION['usuario_id']) && !isset($_SESSION['usuario_id']) && empty($_SESSION['login_time']))) {
+  || (!isset($_SESSION['usuario_id']) && empty($_SESSION['login_time']))) {
   header('Location: ../index.php');
   exit;
 }
-    require_once 'conexion/bd.php';
 
-                    try {
+require_once 'conexion/bd.php';
+
+// ==========================================
+// OBTENER ROL Y DATOS DEL USUARIO EN SESIÓN
+// ==========================================
+$usuario_id = $_SESSION['usuario_id'];
+$rol_usuario = null;
+$docente_id = null;
+$es_docente = false;
+
+try {
+    // Obtener rol del usuario
+    $stmt_rol = $conexion->prepare("SELECT rol_id FROM usuarios WHERE id = ? LIMIT 1");
+    $stmt_rol->execute([$usuario_id]);
+    $usuario_data = $stmt_rol->fetch(PDO::FETCH_ASSOC);
+    
+    if ($usuario_data) {
+        $rol_usuario = intval($usuario_data['rol_id']);
+        $es_docente = ($rol_usuario === 4); // Rol 4 = Docente
+        
+        // Si es docente, obtener su docente_id
+        if ($es_docente) {
+            $stmt_docente = $conexion->prepare("SELECT id FROM docentes WHERE usuario_id = ? AND activo = 1 LIMIT 1");
+            $stmt_docente->execute([$usuario_id]);
+            $docente_data = $stmt_docente->fetch(PDO::FETCH_ASSOC);
+            
+            if ($docente_data) {
+                $docente_id = intval($docente_data['id']);
+            } else {
+                // El usuario tiene rol docente pero no está en tabla docentes
+                die('Error: No se encontró registro de docente asociado a su usuario.');
+            }
+        }
+    }
+} catch (PDOException $e) {
+    error_log("Error obteniendo datos de usuario: " . $e->getMessage());
+    die('Error al verificar permisos de usuario.');
+}
+
+// Obtener datos del colegio
+try {
     $stmt_cp = $conexion->prepare("SELECT nombre, ruc, foto, direccion, refran FROM colegio_principal WHERE id = 1 LIMIT 1");
     $stmt_cp->execute();
     $colegio = $stmt_cp->fetch(PDO::FETCH_ASSOC);
     if ($colegio) {
-        $colegio_nombre = isset($colegio['nombre']) ? $colegio['nombre'] : '';
-        $colegio_ruc    = isset($colegio['ruc']) ? $colegio['ruc'] : '';
-        $colegio_foto   = isset($colegio['foto']) ? $colegio['foto'] : '';
-        $colegio_direccion = isset($colegio['direccion']) ? $colegio['direccion'] : '';
-        $refran = isset($colegio['refran']) ? $colegio['refran'] : '';
+        $colegio_nombre = $colegio['nombre'] ?? '';
+        $colegio_ruc = $colegio['ruc'] ?? '';
+        $colegio_foto = $colegio['foto'] ?? '';
+        $colegio_direccion = $colegio['direccion'] ?? '';
+        $refran = $colegio['refran'] ?? '';
     }
 } catch (PDOException $e) {
     error_log("Error fetching colegio_principal: " . $e->getMessage());
 }
 
-// Variables solicitadas (nombre, ruc, foto)
 $nombre = $colegio_nombre;
-$ruc    = $colegio_ruc;
-$foto   = $colegio_foto;
+$ruc = $colegio_ruc;
+$foto = $colegio_foto;
 $direccion = $colegio_direccion;
-$refran = $refran;
 
-    // Obtener cursos con toda su información relacionada
-    try {
-        $sql = "SELECT c.*, 
-                    ad.id as asignacion_id,
-                    d.nombres as docente_nombres, d.apellidos as docente_apellidos,
-                    ac.nombre as area_nombre, ac.codigo as area_codigo,
-                    s.grado, s.seccion, s.codigo as seccion_codigo,
-                    n.nombre as nivel_nombre,
-                    pa.nombre as periodo_nombre
-                FROM cursos c
-                INNER JOIN asignaciones_docentes ad ON c.asignacion_id = ad.id
-                INNER JOIN docentes d ON ad.docente_id = d.id
-                INNER JOIN areas_curriculares ac ON ad.area_id = ac.id
-                INNER JOIN secciones s ON ad.seccion_id = s.id
-                INNER JOIN niveles_educativos n ON s.nivel_id = n.id
-                INNER JOIN periodos_academicos pa ON ad.periodo_academico_id = pa.id
-                ORDER BY c.fecha_creacion DESC";
-        
-        $stmt_cursos = $conexion->prepare($sql);
-        $stmt_cursos->execute();
-        $cursos = $stmt_cursos->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-        $cursos = [];
-        $error_cursos = "Error al cargar cursos: " . $e->getMessage();
+// ==========================================
+// OBTENER CURSOS (FILTRADO POR ROL)
+// ==========================================
+try {
+    $sql = "SELECT c.*, 
+                ad.id as asignacion_id,
+                ad.docente_id,
+                d.nombres as docente_nombres, d.apellidos as docente_apellidos,
+                ac.nombre as area_nombre, ac.codigo as area_codigo,
+                s.grado, s.seccion, s.codigo as seccion_codigo,
+                n.nombre as nivel_nombre,
+                pa.nombre as periodo_nombre
+            FROM cursos c
+            INNER JOIN asignaciones_docentes ad ON c.asignacion_id = ad.id
+            INNER JOIN docentes d ON ad.docente_id = d.id
+            INNER JOIN areas_curriculares ac ON ad.area_id = ac.id
+            INNER JOIN secciones s ON ad.seccion_id = s.id
+            INNER JOIN niveles_educativos n ON s.nivel_id = n.id
+            INNER JOIN periodos_academicos pa ON ad.periodo_academico_id = pa.id";
+    
+    // FILTRO: Si es docente, solo sus cursos
+    if ($es_docente && $docente_id) {
+        $sql .= " WHERE ad.docente_id = :docente_id";
     }
-
-    // Obtener asignaciones docentes activas para crear nuevos cursos
-    try {
-        $sql_asignaciones = "SELECT ad.*, 
-                                d.nombres as docente_nombres, d.apellidos as docente_apellidos,
-                                ac.nombre as area_nombre,
-                                s.grado, s.seccion, s.codigo as seccion_codigo,
-                                n.nombre as nivel_nombre
-                            FROM asignaciones_docentes ad
-                            INNER JOIN docentes d ON ad.docente_id = d.id
-                            INNER JOIN areas_curriculares ac ON ad.area_id = ac.id
-                            INNER JOIN secciones s ON ad.seccion_id = s.id
-                            INNER JOIN niveles_educativos n ON s.nivel_id = n.id
-                            WHERE ad.activo = 1
-                            ORDER BY n.orden, s.grado, s.seccion, ac.nombre";
-        $stmt_asignaciones = $conexion->prepare($sql_asignaciones);
-        $stmt_asignaciones->execute();
-        $asignaciones_disponibles = $stmt_asignaciones->fetchAll(PDO::FETCH_ASSOC);
-    } catch (PDOException $e) {
-        $asignaciones_disponibles = [];
+    
+    $sql .= " ORDER BY c.fecha_creacion DESC";
+    
+    $stmt_cursos = $conexion->prepare($sql);
+    
+    if ($es_docente && $docente_id) {
+        $stmt_cursos->bindParam(':docente_id', $docente_id, PDO::PARAM_INT);
     }
+    
+    $stmt_cursos->execute();
+    $cursos = $stmt_cursos->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $cursos = [];
+    $error_cursos = "Error al cargar cursos: " . $e->getMessage();
+}
 
-    // Obtener áreas curriculares para filtros
+// ==========================================
+// OBTENER ASIGNACIONES DISPONIBLES (FILTRADO)
+// ==========================================
+try {
+    $sql_asignaciones = "SELECT ad.*, 
+                            d.nombres as docente_nombres, d.apellidos as docente_apellidos,
+                            ac.nombre as area_nombre,
+                            s.grado, s.seccion, s.codigo as seccion_codigo,
+                            n.nombre as nivel_nombre
+                        FROM asignaciones_docentes ad
+                        INNER JOIN docentes d ON ad.docente_id = d.id
+                        INNER JOIN areas_curriculares ac ON ad.area_id = ac.id
+                        INNER JOIN secciones s ON ad.seccion_id = s.id
+                        INNER JOIN niveles_educativos n ON s.nivel_id = n.id
+                        WHERE ad.activo = 1";
+    
+    // FILTRO: Si es docente, solo sus asignaciones
+    if ($es_docente && $docente_id) {
+        $sql_asignaciones .= " AND ad.docente_id = :docente_id";
+    }
+    
+    $sql_asignaciones .= " ORDER BY n.orden, s.grado, s.seccion, ac.nombre";
+    
+    $stmt_asignaciones = $conexion->prepare($sql_asignaciones);
+    
+    if ($es_docente && $docente_id) {
+        $stmt_asignaciones->bindParam(':docente_id', $docente_id, PDO::PARAM_INT);
+    }
+    
+    $stmt_asignaciones->execute();
+    $asignaciones_disponibles = $stmt_asignaciones->fetchAll(PDO::FETCH_ASSOC);
+} catch (PDOException $e) {
+    $asignaciones_disponibles = [];
+}
+
+// ==========================================
+// OBTENER FILTROS (SOLO PARA ADMIN/DIRECTOR)
+// ==========================================
+$areas_curriculares = [];
+$docentes_activos = [];
+
+if (!$es_docente) {
+    // Solo mostrar filtros completos para administradores
     try {
         $stmt_areas = $conexion->prepare("SELECT * FROM areas_curriculares WHERE activo = 1 ORDER BY nombre ASC");
         $stmt_areas->execute();
@@ -87,7 +159,6 @@ $refran = $refran;
         $areas_curriculares = [];
     }
 
-    // Obtener docentes activos para filtros
     try {
         $stmt_docentes = $conexion->prepare("SELECT id, nombres, apellidos FROM docentes WHERE activo = 1 ORDER BY apellidos ASC");
         $stmt_docentes->execute();
@@ -95,45 +166,61 @@ $refran = $refran;
     } catch (PDOException $e) {
         $docentes_activos = [];
     }
+} else {
+    // Para docentes: solo áreas de sus cursos
+    try {
+        $stmt_areas = $conexion->prepare("
+            SELECT DISTINCT ac.* 
+            FROM areas_curriculares ac
+            INNER JOIN asignaciones_docentes ad ON ac.id = ad.area_id
+            WHERE ad.docente_id = ? AND ac.activo = 1
+            ORDER BY ac.nombre ASC
+        ");
+        $stmt_areas->execute([$docente_id]);
+        $areas_curriculares = $stmt_areas->fetchAll(PDO::FETCH_ASSOC);
+    } catch (PDOException $e) {
+        $areas_curriculares = [];
+    }
+}
 
-    // Calcular estadísticas
-    $total_cursos = count($cursos);
-    $cursos_activos = 0;
-    $total_estudiantes = 0;
-    $promedio_progreso = 0;
-    
-    foreach ($cursos as $curso) {
-        $config = json_decode($curso['configuraciones'], true);
-        if (isset($config['estado']) && $config['estado'] === 'ACTIVO') {
-            $cursos_activos++;
-        }
-        
-        $estudiantes = json_decode($curso['estudiantes_inscritos'], true);
-        if (is_array($estudiantes)) {
-            $total_estudiantes += count($estudiantes);
-        }
-        
-        $stats = json_decode($curso['estadisticas'], true);
-        if (isset($stats['progreso_promedio'])) {
-            $promedio_progreso += $stats['progreso_promedio'];
-        }
+// Calcular estadísticas (se mantiene igual)
+$total_cursos = count($cursos);
+$cursos_activos = 0;
+$total_estudiantes = 0;
+$promedio_progreso = 0;
+
+foreach ($cursos as $curso) {
+    $config = json_decode($curso['configuraciones'], true);
+    if (isset($config['estado']) && $config['estado'] === 'ACTIVO') {
+        $cursos_activos++;
     }
     
-    $promedio_progreso = $total_cursos > 0 ? round($promedio_progreso / $total_cursos, 2) : 0;
-
-    // Estadísticas por área
-    $cursos_por_area = [];
-    foreach ($cursos as $curso) {
-        $area = $curso['area_nombre'];
-        $cursos_por_area[$area] = ($cursos_por_area[$area] ?? 0) + 1;
+    $estudiantes = json_decode($curso['estudiantes_inscritos'], true);
+    if (is_array($estudiantes)) {
+        $total_estudiantes += count($estudiantes);
     }
-
-    // Estadísticas por nivel
-    $cursos_por_nivel = [];
-    foreach ($cursos as $curso) {
-        $nivel = $curso['nivel_nombre'];
-        $cursos_por_nivel[$nivel] = ($cursos_por_nivel[$nivel] ?? 0) + 1;
+    
+    $stats = json_decode($curso['estadisticas'], true);
+    if (isset($stats['progreso_promedio'])) {
+        $promedio_progreso += $stats['progreso_promedio'];
     }
+}
+
+$promedio_progreso = $total_cursos > 0 ? round($promedio_progreso / $total_cursos, 2) : 0;
+
+// Estadísticas por área
+$cursos_por_area = [];
+foreach ($cursos as $curso) {
+    $area = $curso['area_nombre'];
+    $cursos_por_area[$area] = ($cursos_por_area[$area] ?? 0) + 1;
+}
+
+// Estadísticas por nivel
+$cursos_por_nivel = [];
+foreach ($cursos as $curso) {
+    $nivel = $curso['nivel_nombre'];
+    $cursos_por_nivel[$nivel] = ($cursos_por_nivel[$nivel] ?? 0) + 1;
+}
 ?>
 
 <!doctype html>
@@ -141,7 +228,7 @@ $refran = $refran;
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Gestión de Cursos - <?php echo $nombre; ?></title>
+    <title><?= $es_docente ? 'Mis Cursos' : 'Gestión de Cursos' ?> - <?php echo $nombre; ?></title>
     <?php
         $favicon = !empty($foto) ? htmlspecialchars($foto) : 'assets/favicons/favicon-32x32.png';
     ?>
@@ -150,6 +237,7 @@ $refran = $refran;
     <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css" />
     <link rel="stylesheet" href="assets/css/style.css" />
     <style>
+    /* ... (mantener todos los estilos existentes) ... */
     .body-wrapper {
         margin-top: 0px !important;
         padding-top: 0px !important;
@@ -211,13 +299,6 @@ $refran = $refran;
         transition: width 0.3s ease;
     }
 
-    . {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border-radius: 0.5rem;
-        padding: 1.5rem;
-    }
-
     .stats-number {
         font-size: 2.5rem;
         font-weight: bold;
@@ -266,38 +347,29 @@ $refran = $refran;
             <div class="container-fluid">
                 
                 <!-- Header -->
-                <header class="app-header">
-                    <nav class="navbar navbar-expand-lg navbar-light">
-                        <ul class="navbar-nav">
-                            <li class="nav-item d-block d-xl-none">
-                                <a class="nav-link sidebartoggler" id="headerCollapse" href="javascript:void(0)">
-                                    <i class="ti ti-menu-2"></i>
-                                </a>
-                            </li>
-                        </ul>
-                        <div class="navbar-collapse justify-content-end px-0" id="navbarNav">
-                            <ul class="navbar-nav flex-row ms-auto align-items-center justify-content-end">
-                                <li class="nav-item">
-                                    <span class="badge bg-primary fs-2 rounded-4 lh-sm">Sistema AAC</span>
-                                </li>
-                            </ul>
-                        </div>
-                    </nav>
-                </header>
+                <?php include 'includes/header.php'; ?>
 
                 <!-- Page Title -->
                 <div class="row">
                     <div class="col-12">
                         <div class="d-flex align-items-center justify-content-between mb-4">
                             <div>
-                                <h4 class="fw-bold mb-0">Gestión de Cursos</h4>
-                                <p class="mb-0 text-muted">Administra los cursos, unidades y contenidos del periodo académico</p>
+                                <h4 class="fw-bold mb-0"><?= $es_docente ? 'Mis Cursos' : 'Gestión de Cursos' ?></h4>
+                                <p class="mb-0 text-muted">
+                                    <?= $es_docente 
+                                        ? 'Administra tus cursos asignados y contenidos académicos' 
+                                        : 'Administra los cursos, unidades y contenidos del periodo académico' 
+                                    ?>
+                                </p>
                             </div>
                             <div class="d-flex gap-2">
+                                <?php if (!$es_docente): ?>
+                                <!-- Solo admin puede crear nuevos cursos -->
                                 <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAgregarCurso">
                                     <i class="ti ti-plus me-2"></i>
                                     Nuevo Curso
                                 </button>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>
@@ -310,7 +382,9 @@ $refran = $refran;
                             <div class="stats-number" style="font-size: 2.5rem; font-weight: 700; color: #A8D8EA; margin-bottom: 0.5rem;">
                                 <?= $total_cursos ?>
                             </div>
-                            <div class="stats-label" style="font-size: 1rem; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 1px;">Total de Cursos</div>
+                            <div class="stats-label" style="font-size: 1rem; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 1px;">
+                                <?= $es_docente ? 'Mis Cursos' : 'Total de Cursos' ?>
+                            </div>
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -326,7 +400,9 @@ $refran = $refran;
                             <div class="stats-number" style="font-size: 2.5rem; font-weight: 700; color: #BAE1FF; margin-bottom: 0.5rem;">
                                 <?= $total_estudiantes ?>
                             </div>
-                            <div class="stats-label" style="font-size: 1rem; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 1px;">Estudiantes Inscritos</div>
+                            <div class="stats-label" style="font-size: 1rem; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 1px;">
+                                <?= $es_docente ? 'Mis Estudiantes' : 'Estudiantes Inscritos' ?>
+                            </div>
                         </div>
                     </div>
                     <div class="col-md-3">
@@ -343,7 +419,7 @@ $refran = $refran;
                 <div class="card mb-4">
                     <div class="card-body">
                         <div class="row g-3">
-                            <div class="col-md-3">
+                            <div class="col-md-<?= $es_docente ? '4' : '3' ?>">
                                 <label class="form-label">Área Curricular</label>
                                 <select class="form-select" id="filtroArea">
                                     <option value="">Todas las áreas</option>
@@ -352,6 +428,9 @@ $refran = $refran;
                                     <?php endforeach; ?>
                                 </select>
                             </div>
+                            
+                            <?php if (!$es_docente): ?>
+                            <!-- Filtro de docente solo para administradores -->
                             <div class="col-md-3">
                                 <label class="form-label">Docente</label>
                                 <select class="form-select" id="filtroDocente">
@@ -363,7 +442,9 @@ $refran = $refran;
                                     <?php endforeach; ?>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <?php endif; ?>
+                            
+                            <div class="col-md-<?= $es_docente ? '4' : '3' ?>">
                                 <label class="form-label">Estado</label>
                                 <select class="form-select" id="filtroEstado">
                                     <option value="">Todos</option>
@@ -371,142 +452,142 @@ $refran = $refran;
                                     <option value="FINALIZADO">Finalizados</option>
                                 </select>
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-<?= $es_docente ? '4' : '3' ?>">
                                 <label class="form-label">Buscar</label>
                                 <input type="text" class="form-control" id="buscarCurso" placeholder="Buscar curso...">
-                            </div>
-                            <div class="col-md-2">
-                                <label class="form-label">&nbsp;</label>
-                                <div class="d-flex gap-1">
-                                    <button type="button" class="btn btn-outline-secondary flex-fill" onclick="limpiarFiltros()">
-                                        <i class="ti ti-refresh"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-outline-info flex-fill" onclick="exportarCursos()">
-                                        <i class="ti ti-download"></i>
-                                    </button>
-                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Tabla de Cursos -->
+                <!-- Tabla de Cursos (se mantiene igual) -->
                 <div class="row" id="cursosContainer">
-                    <?php foreach ($cursos as $curso): 
-                        $configuraciones = json_decode($curso['configuraciones'], true) ?: [];
-                        $estudiantes = json_decode($curso['estudiantes_inscritos'], true) ?: [];
-                        $estadisticas = json_decode($curso['estadisticas'], true) ?: [];
-                        
-                        $estado = $configuraciones['estado'] ?? 'ACTIVO';
-                        $color_tema = $configuraciones['color_tema'] ?? '#667eea';
-                        $fecha_inicio = $configuraciones['fecha_inicio'] ?? '';
-                        $fecha_fin = $configuraciones['fecha_fin'] ?? '';
-                        
-                        $total_estudiantes_curso = count($estudiantes);
-                        $progreso_promedio = $estadisticas['progreso_promedio'] ?? 0;
-                    ?>
-                        <div class="col-md-6 col-lg-4 mb-4 curso-card" 
-                             data-area="<?= $curso['area_nombre'] ?>" 
-                             data-docente="<?= $curso['docente_nombres'] . ' ' . $curso['docente_apellidos'] ?>"
-                             data-estado="<?= $estado ?>">
-                            <div class="card h-100">
-                                <div class="curso-header" style="background: <?= htmlspecialchars($color_tema) ?>;">
-                                    <div class="curso-codigo"><?= htmlspecialchars($curso['codigo_curso']) ?></div>
-                                    <div class="curso-nombre mt-1"><?= htmlspecialchars($curso['nombre']) ?></div>
-                                    <div class="mt-2">
-                                        <span class="badge bg-white text-dark"><?= htmlspecialchars($curso['area_nombre']) ?></span>
-                                        <span class="badge bg-light text-dark ms-1">
-                                            <?= htmlspecialchars($curso['grado'] . ' - ' . $curso['seccion']) ?>
-                                        </span>
-                                    </div>
-                                </div>
-                                
-                                <div class="card-body">
-                                    <!-- Descripción -->
-                                    <?php if (!empty($curso['descripcion'])): ?>
-                                        <p class="text-muted small mb-3">
-                                            <?= htmlspecialchars(substr($curso['descripcion'], 0, 100)) ?>
-                                            <?= strlen($curso['descripcion']) > 100 ? '...' : '' ?>
-                                        </p>
-                                    <?php endif; ?>
-                                    
-                                    <!-- Docente -->
-                                    <div class="curso-info-item">
-                                        <i class="ti ti-user me-2"></i>
-                                        <strong>Docente:</strong> 
-                                        <?= htmlspecialchars($curso['docente_nombres'] . ' ' . $curso['docente_apellidos']) ?>
-                                    </div>
-                                    
-                                    <!-- Periodo -->
-                                    <div class="curso-info-item">
-                                        <i class="ti ti-calendar me-2"></i>
-                                        <strong>Periodo:</strong> <?= htmlspecialchars($curso['periodo_nombre']) ?>
-                                    </div>
-                                    
-                                    <!-- Estudiantes -->
-                                    <div class="curso-info-item">
-                                        <div class="d-flex justify-content-between align-items-center">
-                                            <span><i class="ti ti-users me-2"></i><strong>Estudiantes:</strong></span>
-                                            <span class="estudiantes-badge"><?= $total_estudiantes_curso ?></span>
+                    <?php if (empty($cursos)): ?>
+                        <div class="col-12">
+                            <div class="alert alert-info text-center">
+                                <i class="ti ti-info-circle me-2"></i>
+                                <?= $es_docente 
+                                    ? 'No tienes cursos asignados actualmente.' 
+                                    : 'No hay cursos registrados en el sistema.' 
+                                ?>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <?php foreach ($cursos as $curso): 
+                            $configuraciones = json_decode($curso['configuraciones'], true) ?: [];
+                            $estudiantes = json_decode($curso['estudiantes_inscritos'], true) ?: [];
+                            $estadisticas = json_decode($curso['estadisticas'], true) ?: [];
+                            
+                            $estado = $configuraciones['estado'] ?? 'ACTIVO';
+                            $color_tema = $configuraciones['color_tema'] ?? '#667eea';
+                            $fecha_inicio = $configuraciones['fecha_inicio'] ?? '';
+                            $fecha_fin = $configuraciones['fecha_fin'] ?? '';
+                            
+                            $total_estudiantes_curso = count($estudiantes);
+                            $progreso_promedio = $estadisticas['progreso_promedio'] ?? 0;
+                        ?>
+                            <div class="col-md-6 col-lg-4 mb-4 curso-card" 
+                                 data-area="<?= $curso['area_nombre'] ?>" 
+                                 data-docente="<?= $curso['docente_nombres'] . ' ' . $curso['docente_apellidos'] ?>"
+                                 data-estado="<?= $estado ?>">
+                                <div class="card h-100">
+                                    <div class="curso-header" style="background: <?= htmlspecialchars($color_tema) ?>;">
+                                        <div class="curso-codigo"><?= htmlspecialchars($curso['codigo_curso']) ?></div>
+                                        <div class="curso-nombre mt-1"><?= htmlspecialchars($curso['nombre']) ?></div>
+                                        <div class="mt-2">
+                                            <span class="badge bg-white text-dark"><?= htmlspecialchars($curso['area_nombre']) ?></span>
+                                            <span class="badge bg-light text-dark ms-1">
+                                                <?= htmlspecialchars($curso['grado'] . ' - ' . $curso['seccion']) ?>
+                                            </span>
                                         </div>
                                     </div>
                                     
-                                    <!-- Progreso -->
-                                    <div class="curso-info-item">
-                                        <div class="mb-1"><i class="ti ti-chart-line me-2"></i><strong>Progreso Promedio</strong></div>
-                                        <div class="progreso-bar">
-                                            <div class="progreso-fill" style="width: <?= $progreso_promedio ?>%"></div>
+                                    <div class="card-body">
+                                        <?php if (!empty($curso['descripcion'])): ?>
+                                            <p class="text-muted small mb-3">
+                                                <?= htmlspecialchars(substr($curso['descripcion'], 0, 100)) ?>
+                                                <?= strlen($curso['descripcion']) > 100 ? '...' : '' ?>
+                                            </p>
+                                        <?php endif; ?>
+                                        
+                                        <?php if (!$es_docente): ?>
+                                        <!-- Mostrar docente solo para admins -->
+                                        <div class="curso-info-item">
+                                            <i class="ti ti-user me-2"></i>
+                                            <strong>Docente:</strong> 
+                                            <?= htmlspecialchars($curso['docente_nombres'] . ' ' . $curso['docente_apellidos']) ?>
                                         </div>
-                                        <div class="text-end mt-1"><small><?= $progreso_promedio ?>%</small></div>
+                                        <?php endif; ?>
+                                        
+                                        <div class="curso-info-item">
+                                            <i class="ti ti-calendar me-2"></i>
+                                            <strong>Periodo:</strong> <?= htmlspecialchars($curso['periodo_nombre']) ?>
+                                        </div>
+                                        
+                                        <div class="curso-info-item">
+                                            <div class="d-flex justify-content-between align-items-center">
+                                                <span><i class="ti ti-users me-2"></i><strong>Estudiantes:</strong></span>
+                                                <span class="estudiantes-badge"><?= $total_estudiantes_curso ?></span>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="curso-info-item">
+                                            <div class="mb-1"><i class="ti ti-chart-line me-2"></i><strong>Progreso Promedio</strong></div>
+                                            <div class="progreso-bar">
+                                                <div class="progreso-fill" style="width: <?= $progreso_promedio ?>%"></div>
+                                            </div>
+                                            <div class="text-end mt-1"><small><?= $progreso_promedio ?>%</small></div>
+                                        </div>
+                                        
+                                        <div class="mt-3">
+                                            <?php if ($fecha_inicio): ?>
+                                                <span class="badge bg-info fecha-badge me-1">
+                                                    Inicio: <?= date('d/m/Y', strtotime($fecha_inicio)) ?>
+                                                </span>
+                                            <?php endif; ?>
+                                            <?php if ($fecha_fin): ?>
+                                                <span class="badge bg-warning fecha-badge">
+                                                    Fin: <?= date('d/m/Y', strtotime($fecha_fin)) ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        </div>
+                                        
+                                        <div class="mt-2">
+                                            <span class="badge <?= $estado === 'ACTIVO' ? 'bg-success' : 'bg-secondary' ?>">
+                                                <?= $estado ?>
+                                            </span>
+                                        </div>
                                     </div>
                                     
-                                    <!-- Fechas -->
-                                    <div class="mt-3">
-                                        <?php if ($fecha_inicio): ?>
-                                            <span class="badge bg-info fecha-badge me-1">
-                                                Inicio: <?= date('d/m/Y', strtotime($fecha_inicio)) ?>
-                                            </span>
-                                        <?php endif; ?>
-                                        <?php if ($fecha_fin): ?>
-                                            <span class="badge bg-warning fecha-badge">
-                                                Fin: <?= date('d/m/Y', strtotime($fecha_fin)) ?>
-                                            </span>
-                                        <?php endif; ?>
-                                    </div>
-                                    
-                                    <!-- Estado -->
-                                    <div class="mt-2">
-                                        <span class="badge <?= $estado === 'ACTIVO' ? 'bg-success' : 'bg-secondary' ?>">
-                                            <?= $estado ?>
-                                        </span>
-                                    </div>
-                                </div>
-                                
-                                <div class="card-footer bg-light">
-                                    <div class="d-flex gap-2 justify-content-center">
-                                        <button type="button" class="btn btn-sm btn-outline-primary" 
-                                                onclick="verDetallesCurso(<?= $curso['id'] ?>)" 
-                                                title="Ver Detalles Completos">
-                                            <i class="ti ti-eye"></i> Detalles
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-outline-success" 
-                                                onclick="editarCurso(<?= $curso['id'] ?>)" 
-                                                title="Editar Curso">
-                                            <i class="ti ti-edit"></i> Editar
-                                        </button>
-                                        <button type="button" class="btn btn-sm btn-outline-info" 
-                                                onclick="gestionarContenido(<?= $curso['id'] ?>)" 
-                                                title="Gestionar Unidades">
-                                            <i class="ti ti-books"></i> Contenido
-                                        </button>
+                                    <div class="card-footer bg-light">
+                                        <div class="d-flex gap-2 justify-content-center">
+                                            <button type="button" class="btn btn-sm btn-outline-primary" 
+                                                    onclick="verDetallesCurso(<?= $curso['id'] ?>)" 
+                                                    title="Ver Detalles Completos">
+                                                <i class="ti ti-eye"></i> Detalles
+                                            </button>
+                                            <?php if (!$es_docente): ?>
+                                            <!-- Solo admin puede editar -->
+                                            <button type="button" class="btn btn-sm btn-outline-success" 
+                                                    onclick="editarCurso(<?= $curso['id'] ?>)" 
+                                                    title="Editar Curso">
+                                                <i class="ti ti-edit"></i> Editar
+                                            </button>
+                                            <?php endif; ?>
+                                            <button type="button" class="btn btn-sm btn-outline-info" 
+                                                    onclick="gestionarContenido(<?= $curso['id'] ?>)" 
+                                                    title="Gestionar Unidades">
+                                                <i class="ti ti-books"></i> Contenido
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    <?php endforeach; ?>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
                 </div>
 
-                <!-- Distribución por Área y Nivel -->
+                <!-- Distribución (se mantiene igual) -->
                 <div class="row mt-4">
                     <div class="col-md-6">
                         <div class="card">
@@ -550,9 +631,11 @@ $refran = $refran;
         </div>
     </div>
 
-    <!-- Incluir Modales -->
+    <!-- Incluir Modales (condicionalmente) -->
+    <?php if (!$es_docente): ?>
     <?php include 'modales/cursos/modal_agregar.php'; ?>
     <?php include 'modales/cursos/modal_editar.php'; ?>
+    <?php endif; ?>
     <?php include 'modales/cursos/modal_detalles.php'; ?>
 
     <!-- Scripts -->
@@ -565,22 +648,26 @@ $refran = $refran;
 
     <script>
         const asignacionesDisponibles = <?= json_encode($asignaciones_disponibles) ?>;
+        const esDocente = <?= $es_docente ? 'true' : 'false' ?>;
 
         $(document).ready(function() {
-            // Aplicar filtros
-            $('#filtroArea, #filtroDocente, #filtroEstado, #buscarCurso').on('change keyup', aplicarFiltros);
+            $('#filtroArea, <?= !$es_docente ? "'#filtroDocente, '" : '' ?>#filtroEstado, #buscarCurso').on('change keyup', aplicarFiltros);
         });
 
         function aplicarFiltros() {
             const areaFiltro = $('#filtroArea option:selected').text().trim();
+            <?php if (!$es_docente): ?>
             const docenteFiltro = $('#filtroDocente option:selected').text().trim();
+            <?php endif; ?>
             const estadoFiltro = $('#filtroEstado').val();
             const busqueda = $('#buscarCurso').val().toLowerCase();
 
             $('.curso-card').each(function() {
                 const card = $(this);
                 const area = card.data('area');
+                <?php if (!$es_docente): ?>
                 const docente = card.data('docente');
+                <?php endif; ?>
                 const estado = card.data('estado');
                 const texto = card.text().toLowerCase();
 
@@ -590,9 +677,11 @@ $refran = $refran;
                     mostrar = false;
                 }
 
+                <?php if (!$es_docente): ?>
                 if (docenteFiltro && docenteFiltro !== 'Todos los docentes' && !docente.includes(docenteFiltro)) {
                     mostrar = false;
                 }
+                <?php endif; ?>
 
                 if (estadoFiltro && estado !== estadoFiltro) {
                     mostrar = false;
@@ -607,7 +696,7 @@ $refran = $refran;
         }
 
         function limpiarFiltros() {
-            $('#filtroArea, #filtroDocente, #filtroEstado').val('');
+            $('#filtroArea, <?= !$es_docente ? "'#filtroDocente, '" : '' ?>#filtroEstado').val('');
             $('#buscarCurso').val('');
             aplicarFiltros();
         }
@@ -620,6 +709,7 @@ $refran = $refran;
             $('#loadingOverlay').hide();
         }
 
+        <?php if (!$es_docente): ?>
         function editarCurso(id) {
             mostrarCarga();
             
@@ -644,6 +734,7 @@ $refran = $refran;
                 mostrarError('Error al obtener datos del curso');
             });
         }
+        <?php endif; ?>
 
         function verDetallesCurso(id) {
             mostrarCarga();

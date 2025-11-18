@@ -14,7 +14,7 @@ if (!isset($usuario) || !isset($foto_perfil)) {
             
             if ($usuario_header) {
                 $nombre_completo = trim($usuario_header['nombres'] . ' ' . $usuario_header['apellidos']);
-                $foto_perfil_header = !empty($usuario_header['foto_url']) ? '../' . $usuario_header['foto_url'] : '../assets/images/profile/user-default.jpg';
+                $foto_perfil_header = !empty($usuario_header['foto_url']) ? '../Sistemas/modales/' . $usuario_header['foto_url'] : '../assets/images/profile/user-default.jpg';
                 $rol_nombre = $usuario_header['rol_nombre'] ?? 'Usuario';
             } else {
                 $nombre_completo = 'Usuario';
